@@ -1,0 +1,29 @@
+# .gitignore文件内容示例
+
+# Python相关
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+.ipynb_checkpoints/
+
+# 编辑器/IDE相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 系统相关
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 日志文件
+*.log

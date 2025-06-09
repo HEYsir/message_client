@@ -1,0 +1,38 @@
+import os
+import importlib
+import pkgutil
+from tkinter import Tk
+from ui.main_window import MainWindow
+import application
+
+def discover_config_tabs():
+    """自动发现并导入所有配置标签页"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    app_path = os.path.join(current_dir, 'application')
+    
+    if not os.path.exists(app_path):
+        print(f"Warning: Application directory not found at {app_path}")
+        return
+    
+    for item in os.listdir(app_path):
+        item_path = os.path.join(app_path, item)
+        if os.path.isdir(item_path) and not item.startswith('__'):
+            if os.path.exists(os.path.join(item_path, 'ui_config_tab.py')):
+                module_path = f'application.{item}.ui_config_tab'
+                try:
+                    importlib.import_module(module_path)
+                except (ImportError, SyntaxError) as e:
+                    print(f"Error: Could not load config tab from {module_path}: {e}")
+
+def main():
+    # 发现并加载所有配置标签页
+    discover_config_tabs()
+
+    # 创建主窗口
+    root = Tk()
+    app = MainWindow(root)
+    root.protocol("WM_DELETE_WINDOW", lambda: (app.cleanup(), root.destroy()))
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
