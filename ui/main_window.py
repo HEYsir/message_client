@@ -1,13 +1,17 @@
 import tkinter as tk
-from tkinter import ttk, PanedWindow, Frame, BOTH, LEFT, RIGHT, VERTICAL, HORIZONTAL, END, WORD, X, Y
+from tkinter import ttk, PanedWindow, Frame, BOTH, LEFT, RIGHT, VERTICAL, HORIZONTAL, END, WORD, X, Y, DISABLED,NORMAL
 from tkinter import scrolledtext
 from core.message_bus import MessageBus
-from typing import Type, Dict, List
+from typing import Type, Dict
 from ui.base_tab import BaseConfigTab, CollapsibleNotebook
 
-import tkinter as tk
-from tkinter import ttk, StringVar
-from abc import ABC, abstractmethod
+import xml.dom.minidom
+import json
+import html
+import re
+
+from core.protocol_parser import ParserRegistry
+from core.image_handler import ImageHandler
 
 
 class MainWindow:
@@ -25,6 +29,7 @@ class MainWindow:
         self.root.geometry("1200x800")
         self.message_bus = MessageBus()
         self.config_tab_instances: Dict[str, BaseConfigTab] = {}
+        self.image_handler = ImageHandler('./downloads')
 
         # 初始化自定义样式
         self.init_styles()
@@ -125,7 +130,7 @@ class MainWindow:
             pady=10
         )
         self.detail_text.pack(fill=BOTH, expand=True)
-        self.detail_text.config(state="disabled")
+        self.detail_text.config(state=DISABLED)
         
     def setup_tree_columns(self):
         """设置树形视图列"""
@@ -145,6 +150,7 @@ class MainWindow:
         """消息选择事件处理"""
         selection = self.ui_msg_tree.selection()
         if not selection:
+            print("没有选中任何消息")
             return
             
         item = self.ui_msg_tree.item(selection[0])
@@ -161,24 +167,95 @@ class MainWindow:
     def display_message(self, message):
         """显示消息详情"""
         self.current_message = message
-        self.detail_text.config(state="normal")
+        self.detail_text.config(state=NORMAL)
         self.detail_text.delete(1.0, END)
         
-        # 显示消息内容
-        # todo:这里实现
-        self.detail_text.config(state="disabled")
+        # 显示基本信息
+        if self.current_message.get("source") == "RabbitMQ":
+            self.detail_text.insert(END, f"来源: RabbitMQ\n")
+            self.detail_text.insert(END, f"配置名称: {self.current_message['config_name']}\n")
+            self.detail_text.insert(END, f"主机: {self.current_message['ip']}\n")
+            self.detail_text.insert(END, f"队列: {self.current_message['queue']}\n")
+        elif self.current_message.get("source") == "Kafka":
+            self.detail_text.insert(END, f"来源: Kafka\n")
+            self.detail_text.insert(END, f"配置名称: {self.current_message['config_name']}\n")
+            self.detail_text.insert(END, f"服务地址: {self.current_message['bootstrap_servers']}\n")
+            self.detail_text.insert(END, f"主题: {self.current_message['topic']}\n")
+            self.detail_text.insert(END, f"分区: {self.current_message['partition']}\n")
+            self.detail_text.insert(END, f"偏移量: {self.current_message['offset']}\n")
+        else:  # HTTP
+            self.detail_text.insert(END, f"来源: HTTP\n")
+            self.detail_text.insert(END, f"完整URL: {self.current_message['url']}\n")
+            self.detail_text.insert(END, f"来源IP: {self.current_message['ip']}\n")
+        
+        self.detail_text.insert(END, f"接收时间: {self.current_message['timestamp']}\n")
+        self.detail_text.insert(END, "-" * 80 + "\n\n")
+        
+        # 提取图片信息
+        # image_info = parser.extract_image_info(parsed_data)
+        # if image_info:
+        #     self.image_handler.async_download(
+        #         image_info['url'],
+        #         image_info['filename']
+        #     )
+                
+        parsed_data = self.current_message["parsed_data"]
+        
+        if parsed_data.get("type") == "XML":
+            try:
+                parsed = xml.dom.minidom.parseString(self.current_message["raw_data"])
+                xml_str = parsed.toprettyxml(indent="  ")
+                xml_str = re.sub(r'\n\s*\n', '\n', xml_str)
+                self.detail_text.insert(END, xml_str)
+            except:
+                raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
+                self.detail_text.insert(END, raw_str)
+        elif parsed_data.get("type") == "JSON":
+            try:
+                raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
+                json_data = json.loads(raw_str)
+                formatted = json.dumps(json_data, indent=2, ensure_ascii=False)
+                self.detail_text.insert(END, formatted)
+            except:
+                raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
+                self.detail_text.insert(END, raw_str)
+        else:
+            raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
+            self.detail_text.insert(END, raw_str)
+            
+        self.detail_text.config(state=DISABLED)
         
     def on_message_received(self, message):
         """处理接收到的消息"""
         source = message["source"]
         if source not in self.messages:
             self.messages[source] = []
-            
+
+        # 获取对应的解析器
+        parser = ParserRegistry.get_parser('basealarm')
+        post_data = message.get("raw_data", b"")
+        parsed_data = parser.parse(message['content_type'], post_data)
+        message["parsed_data"] = parsed_data
+
         self.messages[source].append(message)
         self.add_message_to_tree(message)
+        # 如果当前选中消息是新消息，自动显示详情
+        if self.current_message and self.current_message["timestamp"] == message["timestamp"] and self.current_message["source"] == source:
+            self.display_message(message)
+        # 如果当前没有选中消息，自动显示最新消息
+        elif not self.current_message:
+            self.display_message(message)
+        # 如果当前消息列表为空，自动显示最新消息
+        elif not self.ui_msg_tree.get_children():
+            self.display_message(message)
+
+        # 更新服务状态
+        if message.get("type") == "status":
+            self.on_status_received(message)
         
     def add_message_to_tree(self, message):
         """添加消息到列表"""
+
         self.ui_msg_tree.insert("", "end", values=(
             message["timestamp"],
             message["source"],
@@ -186,7 +263,7 @@ class MainWindow:
             message["parsed_data"].get("event_type", "N/A"),
             message.get("queue", message.get("topic", ""))
         ))
- 
+
     def on_status_received(self, message):
         """更新服务状态"""
         source = message["source"]

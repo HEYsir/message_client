@@ -66,6 +66,7 @@ class CollapsibleNotebook(ttk.Frame):
         self.current_tab = selected_tab        # 如果处于展开状态，则更新显示
         if self.expanded:
             self._update_tab_display()
+    
     def _update_tab_display(self):
         """更新标签页显示"""
         # 隐藏所有标签页内容
@@ -89,7 +90,8 @@ class CollapsibleNotebook(ttk.Frame):
             self.toggle_btn.config(text="▲ 折叠")  # 向上箭头表示展开状态
             self.expanded = True
             # 确保显示当前标签页内容
-            # self._update_tab_display()
+            self._update_tab_display()
+    
         # 重新布局父容器
         self.parent.update_idletasks()
 

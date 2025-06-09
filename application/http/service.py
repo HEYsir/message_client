@@ -3,15 +3,13 @@ import threading
 from aiohttp import web
 from datetime import datetime
 from core.message_bus import MessageBus
-from core.protocol_parser import ParserRegistry
-from core.image_handler import ImageHandler
+
 
 class HTTPServer(threading.Thread):
     def __init__(self, config: dict):
         super().__init__(daemon=True)
         self.config = config
         self.message_bus = MessageBus()
-        self.image_handler = ImageHandler(config.get('download_dir', './downloads'))
         self._stop_event = threading.Event()
         self.server = None
         self.runner = None
@@ -26,33 +24,20 @@ class HTTPServer(threading.Thread):
             client_ip = request.remote
             post_data = await request.read()
             content_type = request.content_type
+            if not post_data:
+                return web.Response(text="No data received", status=400)
             
-            # 获取对应的解析器
-            parser = ParserRegistry.get_parser(self.config.get('protocol', 'hikvision'))
-            if parser:
-                # 解析消息
-                parsed_data = parser.parse(post_data)
-                
-                # 提取图片信息
-                image_info = parser.extract_image_info(parsed_data)
-                if image_info:
-                    self.image_handler.async_download(
-                        image_info['url'],
-                        image_info['filename']
-                    )
-                
-                # 发布消息到消息总线
-                message = {
-                    "source": "HTTP",
-                    "config_name": self.config['name'],
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "ip": client_ip,
-                    "url": f"http://{self.config['host']}:{self.config['port']}/alarm",
-                    "content_type": content_type,
-                    "parsed_data": parsed_data,
-                    "raw_data": post_data
-                }
-                self.message_bus.publish("message.received", message)
+            # 发布消息到消息总线
+            message = {
+                "source": "HTTP",
+                "config_name": self.config['name'],
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ip": client_ip,
+                "url": f"http://{self.config['host']}:{self.config['port']}/alarm",
+                "content_type": content_type,
+                "raw_data": post_data
+            }
+            self.message_bus.publish("message.received", message)
                 
             return web.Response(text="OK", status=200)
             
@@ -73,7 +58,7 @@ class HTTPServer(threading.Thread):
             asyncio.set_event_loop(loop)
             
             app = web.Application()
-            app.router.add_post("/alarm", self.handle_request)
+            app.router.add_post("/httpalarm", self.handle_request)
             
             self.runner = web.AppRunner(app)
             loop.run_until_complete(self.runner.setup())
