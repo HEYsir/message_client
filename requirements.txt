@@ -1,3 +1,5 @@
 aiohttp
 pyperclip
 requests
+confluent_kafka
+pika

@@ -29,11 +29,11 @@ class HTTPConfigTab(BaseConfigTab):
     def create_tab_content(self):
         """创建HTTP服务配置界面"""
         # 主框架
-        main_frame = ttk.Frame(self.frame)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        frame = ttk.Frame(main_frame)
-        frame.pack(fill="x", pady=5)
+        self.style = ttk.Style()
+        self.style.configure('green.TFrame', background='green')
+        # frame = ttk.Frame(self.frame, style='green.TFrame')
+        frame = ttk.Frame(self.frame)
+        frame.pack(fill="both", padx=10)
 
         # 监听地址
         ttk.Label(frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
@@ -54,9 +54,7 @@ class HTTPConfigTab(BaseConfigTab):
         # URL显示区域
         url_frame = Frame(frame)
         url_frame.grid(row=1, column=0, columnspan=5, sticky="ew", padx=5, pady=(0, 5))
-
         ttk.Label(url_frame, text="服务地址:").pack(side=LEFT, padx=(0, 5))
-
         self.url_label = ttk.Label(
             url_frame,
             text="",

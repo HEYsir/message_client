@@ -1,15 +1,17 @@
 import tkinter as tk
 from tkinter import ttk, StringVar
 from abc import ABC, abstractmethod
+from tkinter import ttk, filedialog
+from tkinter import END
 
 class CollapsibleNotebook(ttk.Frame):
     """可折叠的标签页容器 - 保留标签选择条"""
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.expanded = True  # 初始为展开状态
-        self.current_tab = None  # 当前选中的标签页
-        
+        self.expanded = True  # 初始为展开状p态p
+        self.current_tab = None  # 当前选中的标签页pijoiasdasd
+
         # 创建顶部框架（包含折叠按钮和标签选择条）
         self.top_frame = ttk.Frame(self)
         self.top_frame.pack(fill="x", side="top")
@@ -134,3 +136,11 @@ class BaseConfigTab(ABC):
         """创建标签页具体内容（由子类实现）"""
         pass
 
+    def browse_file(self, entry_widget):
+        """浏览文件并设置到输入框"""
+        filepath = filedialog.askopenfilename()
+        if filepath:
+            entry_widget.configure(state='normal')
+            entry_widget.delete(0, END)
+            entry_widget.insert(0, filepath)
+            entry_widget.configure(state='readonly')
