@@ -29,15 +29,18 @@ class MessageBus:
 
     def publish(self, topic: str, message: dict) -> None:
         """发布消息到指定主题"""
+        if not isinstance(message, dict):
+            raise ValueError("Message must be a dictionary")
         self.message_queue.put((topic, message))
         
     def process_messages(self) -> None:
         """处理队列中的消息"""
         while not self.message_queue.empty():
             topic, message = self.message_queue.get()
-            if topic in self.subscribers:
-                for callback in self.subscribers[topic]:
-                    try:
-                        callback(message)
-                    except Exception as e:
-                        print(f"Error processing message: {e}")
+            if topic not in self.subscribers:
+                continue
+            for callback in self.subscribers[topic]:
+                try:
+                    callback(message)
+                except Exception as e:
+                    print(f"Error processing message: {e}")

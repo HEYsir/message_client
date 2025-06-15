@@ -1,8 +1,51 @@
 import tkinter as tk
-from tkinter import ttk, StringVar
+from tkinter import ttk
 from abc import ABC, abstractmethod
 from tkinter import ttk, filedialog
 from tkinter import END
+from typing import Type, Dict
+
+class BaseConfigTab(ABC):
+    """标签页基类"""
+
+    def get_tab_name(self) -> str:
+        return self.config_vars["name"]
+    
+    def __init__(self, parent):
+        self.parent = parent
+        self.config_vars = {}
+        self._init_config_vars()
+        
+        # 创建框架作为标签页内容
+        self.frame = ttk.Frame(parent)
+        self.frame.pack(fill="both", expand=True)
+        
+        # 创建标签页内容
+        self.create_tab_content()
+
+    @abstractmethod
+    def _init_config_vars(self):
+        """参数初始化(子类实现)"""
+        raise NotImplementedError("Subclass must implement _init_config_vars()")
+
+    @abstractmethod
+    def create_tab_content(self):
+        """创建标签页具体内容（由子类实现）"""
+        pass
+    
+    @abstractmethod
+    def update_status(self):
+        """创建标签页具体内容（由子类实现）"""
+        pass
+
+    def browse_file(self, entry_widget):
+        """浏览文件并设置到输入框"""
+        filepath = filedialog.askopenfilename()
+        if filepath:
+            entry_widget.configure(state='normal')
+            entry_widget.delete(0, END)
+            entry_widget.insert(0, filepath)
+            entry_widget.configure(state='readonly')
 
 class CollapsibleNotebook(ttk.Frame):
     """可折叠的标签页容器 - 保留标签选择条"""
@@ -34,15 +77,15 @@ class CollapsibleNotebook(ttk.Frame):
         self.content_frame.pack(fill="both", expand=True)
         
         # 标签页字典（存储标签页内容框架）
-        self.tabs = {}
+        self.tabs:Dict[str, BaseConfigTab] = {}
         # 绑定标签切换事件
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
-    def add_tab(self, tab_class):
+    def add_tab(self, tab_class: Type[BaseConfigTab]):
         """添加新的标签页"""
         # 创建标签页内容框架（可折叠部分）
         tab = tab_class(self.content_frame)
-        tab_name = tab_class.get_tab_name()
+        tab_name = tab.get_tab_name()
 
         # 添加到笔记本（标签选择条） - 使用占位框架
         placeholder_frame = ttk.Frame(self.notebook)
@@ -97,50 +140,3 @@ class CollapsibleNotebook(ttk.Frame):
         # 重新布局父容器
         self.parent.update_idletasks()
 
-class BaseConfigTab(ABC):
-    """标签页基类"""
-    @classmethod
-    @abstractmethod
-    def get_tab_name(cls) -> str:
-        """获取标签页名称(子类实现)"""
-        raise NotImplementedError("Subclass must implement get_tab_name()")
-
-    def __init__(self, parent):
-        self.parent = parent
-        self.title = self.__class__.get_tab_name()
-        
-        # 创建框架作为标签页内容
-        self.frame = ttk.Frame(parent)
-        self.frame.pack(fill="both", expand=True)
-        self.config_vars = {}
-        self._init_config_vars()
-        
-        # 创建标签页内容
-        self.create_tab_content()
-    
-    def _init_config_vars(self):
-        """初始化配置变量"""
-        self.config_vars.update({
-            "name": StringVar(),
-            "status": StringVar(value="已停止"),
-            "download_dir": StringVar(value="./downloads")
-        })
-    
-    @abstractmethod
-    def create_tab_content(self):
-        """创建标签页具体内容（由子类实现）"""
-        pass
-    
-    @abstractmethod
-    def update_status(self):
-        """创建标签页具体内容（由子类实现）"""
-        pass
-
-    def browse_file(self, entry_widget):
-        """浏览文件并设置到输入框"""
-        filepath = filedialog.askopenfilename()
-        if filepath:
-            entry_widget.configure(state='normal')
-            entry_widget.delete(0, END)
-            entry_widget.insert(0, filepath)
-            entry_widget.configure(state='readonly')

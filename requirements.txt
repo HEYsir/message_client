@@ -3,3 +3,4 @@ pyperclip
 requests
 confluent_kafka
 pika
+pytz

@@ -62,8 +62,8 @@ class BaseAlarmParser(ProtocolParser):
                     "timestamp": timestamp,
                     "raw_content": data
                 }
-            
-            elif content_type == "application/json":
+            else:
+            # elif content_type == "application/json":
                 json_data = json.loads(data)
                 event_type = json_data.get("eventType", json_data.get("event_type", "N/A"))
                 timestamp = json_data.get("dateTime", json_data.get("timestamp", datetime.now().isoformat()))

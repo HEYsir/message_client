@@ -1,9 +1,8 @@
 import os
 import importlib
-import pkgutil
 from tkinter import Tk
 from ui.main_window import MainWindow
-import application
+
 
 def discover_config_tabs():
     """自动发现并导入所有配置标签页"""

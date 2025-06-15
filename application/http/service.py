@@ -29,11 +29,9 @@ class HTTPServer(threading.Thread):
             
             # 发布消息到消息总线
             message = {
-                "source": "HTTP",
-                "config_name": self.config['name'],
+                "source":self.config['name'],
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "ip": client_ip,
-                "url": f"http://{self.config['host']}:{self.config['port']}/alarm",
                 "content_type": content_type,
                 "raw_data": post_data
             }

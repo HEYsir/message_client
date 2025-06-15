@@ -9,15 +9,10 @@ class KafkaConfigTab(BaseConfigTab):
         super().__init__(*args, **kwargs)
         self.kafka_consumer = None  # 用于管理 Server 实例
     
-    @classmethod
-    def get_tab_name(cls) -> str:
-        return "Kafka 消费"
-    
+
     def _init_config_vars(self):
         """初始化配置变量"""
-        super()._init_config_vars()
-
-        self.kafka_config = {
+        self.config_vars.update({
             "name": "Kafka服务",
             "bootstrap_servers": "10.41.63.199:9092",
             "topics": "STATIC_HUMAN_EXCEPTION_TOPIC",
@@ -29,7 +24,7 @@ class KafkaConfigTab(BaseConfigTab):
             "download_dir": "./kafka_downloads",
             "kafka_ssl_entry":"",
             "status": "已停止"
-        }
+        })
     
     def create_tab_content(self):
         """创建Kafka服务配置界面"""
@@ -43,15 +38,15 @@ class KafkaConfigTab(BaseConfigTab):
 
         # 服务地址
         ttk.Label(frame, text="服务地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.kafka_servers_entry = ttk.Entry(frame)
+        self.kafka_servers_entry = ttk.Entry(frame, textvariable=self.config_vars["bootstrap_servers"])
         self.kafka_servers_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.kafka_servers_entry.insert(0, self.kafka_config["bootstrap_servers"])
+        self.kafka_servers_entry.insert(0, self.config_vars["bootstrap_servers"])
 
         # 主题
         ttk.Label(frame, text="主题:").grid(row=1, column=0, padx=5, pady=0, sticky="e")
-        self.kafka_topics_entry = ttk.Entry(frame)
+        self.kafka_topics_entry = ttk.Entry(frame, textvariable=self.config_vars["topics"])
         self.kafka_topics_entry.grid(row=1, column=1, padx=5, pady=(0,5), sticky="ew")
-        self.kafka_topics_entry.insert(0, self.kafka_config["topics"])
+        self.kafka_topics_entry.insert(0, self.config_vars["topics"])
 
         # SASL认证勾选框
         self.sasl_checkbox_var = BooleanVar(value=False)
@@ -63,12 +58,12 @@ class KafkaConfigTab(BaseConfigTab):
         ttk.Label(frame, text="SASL用户名:").grid(row=0, column=3, padx=5, pady=5, sticky="e")
         self.kafka_user_entry = ttk.Entry(frame)
         self.kafka_user_entry.grid(row=0, column=4, padx=5, pady=5, sticky="ew")
-        self.kafka_user_entry.insert(0, self.kafka_config.get("sasl_username", ""))
+        self.kafka_user_entry.insert(0, self.config_vars.get("sasl_username", ""))
         # SASL密码
         ttk.Label(frame, text="SASL密码:").grid(row=1, column=3, padx=5, pady=0, sticky="e")
         self.kafka_pass_entry = ttk.Entry(frame, show="*")
         self.kafka_pass_entry.grid(row=1, column=4, padx=5, pady=0, sticky="ew")
-        self.kafka_pass_entry.insert(0, self.kafka_config.get("sasl_password", ""))
+        self.kafka_pass_entry.insert(0, self.config_vars.get("sasl_password", ""))
         
         # TLS证书勾选框
         self.tls_checkbox_var = BooleanVar(value=False)
@@ -79,7 +74,7 @@ class KafkaConfigTab(BaseConfigTab):
         # SSL CA路径
         kafka_ssl_entry = ttk.Entry(frame, state='readonly')
         kafka_ssl_entry.grid(row=1, column=5, columnspan=2, padx=5, pady=5, sticky="ew")
-        kafka_ssl_entry.insert(0, self.kafka_config.get("ssl_ca_location", ""))
+        kafka_ssl_entry.insert(0, self.config_vars.get("ssl_ca_location", ""))
         # 浏览按钮
         self.ssl_browse_btn = ttk.Button(
             frame, 
@@ -94,7 +89,7 @@ class KafkaConfigTab(BaseConfigTab):
         btn_frame.grid(row=1, column=7, sticky="e", padx=5, pady=0)
         self.start_btn = ttk.Button(
             btn_frame, 
-            text="启动消费" if self.kafka_config["status"] != "运行中" else "停止消费",
+            text="启动消费" if self.config_vars["status"] != "运行中" else "停止消费",
             width=10,
             command=self._toggle_service
         )
@@ -106,17 +101,32 @@ class KafkaConfigTab(BaseConfigTab):
 
     def _toggle_service(self):
         """切换服务状态"""
-        if self.kafka_consumer and self.kafka_consumer.is_alive():
+        if self.kafka_consumer:
+            if self.kafka_consumer.is_alive():
+                self.kafka_consumer.stop()
             # 停止消费者
             self.kafka_consumer.stop()
             self.kafka_consumer = None
-            self.kafka_config["status"] = "已停止"
+            self.config_vars["status"] = "已停止"
             self.start_btn.config(text="启动消费")
         else:
+            self.config_vars["bootstrap_servers"] = self.kafka_servers_entry.get()
+            self.config_vars["topics"] = self.kafka_topics_entry.get()
             # 启动消费者
-            self.kafka_consumer = KafkaConsumer(self.kafka_config)
+            if self.sasl_checkbox_var.get():
+                self.config_vars["sasl_username"] = self.kafka_user_entry.get()
+                self.config_vars["sasl_password"] = self.kafka_pass_entry.get()
+            else:
+                self.config_vars["sasl_username"] = ""
+                self.config_vars["sasl_password"] = ""
+            if self.tls_checkbox_var.get():
+                self.config_vars["ssl_ca_location"] = self.ssl_browse_btn.cget("text")
+            else:
+                self.config_vars["ssl_ca_location"] = ""
+
+            self.kafka_consumer = KafkaConsumer(self.config_vars)
             self.kafka_consumer.start()
-            self.kafka_config["status"] = "运行中"
+            self.config_vars["status"] = "运行中"
             self.start_btn.config(text="停止消费")
             
     def toggle_sasl_fields(self):
@@ -132,6 +142,6 @@ class KafkaConfigTab(BaseConfigTab):
 
     def update_status(self, status: str):
         """更新服务状态"""
-        self.kafka_config["status"] = status
+        self.config_vars["status"] = status
 # 注册配置页面
 MainWindow.register_config_tab(KafkaConfigTab)

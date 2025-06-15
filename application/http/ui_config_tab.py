@@ -12,18 +12,14 @@ class HTTPConfigTab(BaseConfigTab):
         super().__init__(*args, **kwargs)
         self.server = None  # 用于管理 HTTPServer 实例
 
-    @classmethod
-    def get_tab_name(cls) -> str:
-        return "HTTP 服务"
 
     def _init_config_vars(self):
         """初始化配置变量"""
-        super()._init_config_vars()
         self.config_vars.update({
-            "host": StringVar(value="127.0.0.1"),
-            "port": StringVar(value="8000"),
-            "status": StringVar(value="已停止"),
-            "name": StringVar(value="HTTP服务")
+            "name": "HTTP服务",
+            "host": "0.0.0.0",
+            "port": "8000",
+            "status": "已停止",
         })
 
     def create_tab_content(self):
@@ -37,14 +33,16 @@ class HTTPConfigTab(BaseConfigTab):
 
         # 监听地址
         ttk.Label(frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.host_entry = ttk.Entry(frame, textvariable=self.config_vars["host"])
+        self.host_entry = ttk.Entry(frame)
         self.host_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.host_entry.insert(0, self.config_vars.get("host", ""))
         self.host_entry.bind("<KeyRelease>", self.update_url)
 
         # 端口
         ttk.Label(frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.port_entry = ttk.Entry(frame, textvariable=self.config_vars["port"], width=8)
+        self.port_entry = ttk.Entry(frame, width=8)
         self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        self.port_entry.insert(0, self.config_vars.get("port", ""))
         self.port_entry.bind("<KeyRelease>", self.update_url)
 
         # 启动按钮
@@ -71,7 +69,7 @@ class HTTPConfigTab(BaseConfigTab):
 
     def update_url(self, event=None):
         """更新HTTP服务URL显示"""
-        self.server_url = f"http://{self.config_vars['host'].get()}:{self.config_vars['port'].get()}/httpalarm"
+        self.server_url = f"http://{self.host_entry.get().strip()}:{self.port_entry.get().strip()}/httpalarm"
         self.url_label.config(text=self.server_url)
 
     def copy_url_to_clipboard(self, event=None):
@@ -85,12 +83,14 @@ class HTTPConfigTab(BaseConfigTab):
 
     def _toggle_service(self):
         """切换服务状态"""
-        if self.config_vars["status"].get() == "运行中":
+        if self.config_vars["status"] == "运行中":
             self.stop_service()
             # 启用 host 和 port 输入框
             self.host_entry.config(state="normal")
             self.port_entry.config(state="normal")
         else:
+            self.config_vars["host"] = self.host_entry.get().strip()
+            self.config_vars["port"] = self.port_entry.get().strip()
             self.start_service()
             # 禁用 host 和 port 输入框
             self.host_entry.config(state="disabled")
@@ -100,13 +100,13 @@ class HTTPConfigTab(BaseConfigTab):
         """启动HTTP服务"""
         try:
             config = {
-                "host": self.config_vars["host"].get(),
-                "port": int(self.config_vars["port"].get()),
-                "name": self.config_vars["name"].get()
+                "host": self.config_vars["host"],
+                "port": int(self.config_vars["port"]),
+                "name": self.config_vars["name"]
             }
             self.server = HTTPServer(config)
             self.server.start()
-            self.config_vars["status"].set("运行中")
+            self.config_vars["status"] = "运行中"
             self.start_btn.config(text="停止服务")
         except Exception as e:
             messagebox.showerror("启动失败", f"无法启动服务: {str(e)}")
@@ -117,12 +117,12 @@ class HTTPConfigTab(BaseConfigTab):
             self.server.stop()
             self.server.join()
             self.server = None
-        self.config_vars["status"].set("已停止")
+        self.config_vars["status"] = "已停止"
         self.start_btn.config(text="启动服务")
 
     def update_status(self, status: str):
         """更新服务状态"""
-        self.config_vars["status"].set(status)
+        self.config_vars["status"] = status
 
 
 # 注册配置页面

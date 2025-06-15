@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, PanedWindow, Frame, BOTH, LEFT, RIGHT, VERTICAL, HORIZONTAL, END, WORD, X, Y, DISABLED,NORMAL
 from tkinter import scrolledtext
 from core.message_bus import MessageBus
-from typing import Type, Dict
+from typing import Type, Dict, List
 from ui.base_tab import BaseConfigTab, CollapsibleNotebook
 
 import xml.dom.minidom
@@ -16,12 +16,12 @@ from core.image_handler import ImageHandler
 
 class MainWindow:
     # 用于存储已注册的配置页面类
-    _config_tabs: Dict[str, Type[BaseConfigTab]] = {}
+    _config_tabs: List[Type[BaseConfigTab]] = []
     
     @classmethod
     def register_config_tab(cls, tab_class: Type[BaseConfigTab]):
         """注册配置标签页"""
-        cls._config_tabs[tab_class.get_tab_name()] = tab_class
+        cls._config_tabs.append(tab_class)
     
     def __init__(self, root):
         self.root = root
@@ -43,11 +43,11 @@ class MainWindow:
         
         # 订阅消息
         self.message_bus.subscribe("message.received", self.on_message_received)
-        self.message_bus.subscribe("message.status", self.on_status_received)
+        self.message_bus.subscribe("service.status", self.on_status_received)
 
         # 启动消息处理
-        self.process_messages()
 
+        self.process_messages()
     def init_styles(self):
         pass
 
@@ -71,9 +71,8 @@ class MainWindow:
         self.main_paned.add(self.tab_container)
 
         # 加载所有已注册的配置页面
-        for tab_name, tab_class in self._config_tabs.items():
-            ui_tab_instance = self.tab_container.add_tab(tab_class)
-            self.config_tab_instances[tab_name] = ui_tab_instance
+        for tab_class in self._config_tabs:
+            self.tab_container.add_tab(tab_class)
   
     def create_message_area(self):
         """创建消息显示区域"""
@@ -170,23 +169,9 @@ class MainWindow:
         self.detail_text.config(state=NORMAL)
         self.detail_text.delete(1.0, END)
         
-        # 显示基本信息
-        if self.current_message.get("source") == "RabbitMQ":
-            self.detail_text.insert(END, f"来源: RabbitMQ\n")
-            self.detail_text.insert(END, f"配置名称: {self.current_message['config_name']}\n")
-            self.detail_text.insert(END, f"主机: {self.current_message['ip']}\n")
-            self.detail_text.insert(END, f"队列: {self.current_message['queue']}\n")
-        elif self.current_message.get("source") == "Kafka":
-            self.detail_text.insert(END, f"来源: Kafka\n")
-            self.detail_text.insert(END, f"配置名称: {self.current_message['config_name']}\n")
-            self.detail_text.insert(END, f"服务地址: {self.current_message['bootstrap_servers']}\n")
-            self.detail_text.insert(END, f"主题: {self.current_message['topic']}\n")
-            self.detail_text.insert(END, f"分区: {self.current_message['partition']}\n")
-            self.detail_text.insert(END, f"偏移量: {self.current_message['offset']}\n")
-        else:  # HTTP
-            self.detail_text.insert(END, f"来源: HTTP\n")
-            self.detail_text.insert(END, f"完整URL: {self.current_message['url']}\n")
-            self.detail_text.insert(END, f"来源IP: {self.current_message['ip']}\n")
+  
+        self.detail_text.insert(END, self.current_message.get("source"))
+        self.detail_text.insert(END, f"\n来源IP: {self.current_message.get('ip', "N/A")}\n")
         
         self.detail_text.insert(END, f"接收时间: {self.current_message['timestamp']}\n")
         self.detail_text.insert(END, "-" * 80 + "\n\n")
@@ -270,7 +255,7 @@ class MainWindow:
         status = message.get("status", "未知状态")
         
         # 更新对应的标签页状态
-        tab_instance = self.config_tab_instances.get(source)
+        tab_instance = self.tab_container.tabs.get(source)
         if not tab_instance:
             return
         if hasattr(tab_instance, "update_status"):

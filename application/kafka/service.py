@@ -3,7 +3,32 @@ import threading
 from datetime import datetime
 from core.message_bus import MessageBus
 
+import pytz
 
+class KafkaTimestampFormatter:
+    @staticmethod
+    def format(timestamp_ms: int, fmt: str = "%Y-%m-%d %H:%M:%S", timezone: str = None) -> str:
+        """
+        格式化 Kafka 时间戳
+        :param timestamp_ms: 毫秒级时间戳
+        :param fmt: 时间格式字符串
+        :param timezone: 时区名称 (如 "Asia/Shanghai")
+        :return: 格式化后的时间字符串
+        """
+        if timestamp_ms <= 0:
+            return "N/A"
+        
+        seconds = timestamp_ms / 1000.0
+        dt = datetime.utcfromtimestamp(seconds)
+        
+        if timezone:
+            utc_dt = dt.replace(tzinfo=pytz.utc)
+            target_tz = pytz.timezone(timezone)
+            local_dt = utc_dt.astimezone(target_tz)
+            return local_dt.strftime(fmt)
+        else:
+            return dt.strftime(fmt)
+        
 class KafkaConsumer(threading.Thread):
     def __init__(self, config: dict):
         super().__init__(daemon=True)
@@ -15,8 +40,6 @@ class KafkaConsumer(threading.Thread):
     def stop(self):
         """停止消费者"""
         self._stop_event.set()
-        if self.consumer:
-            self.consumer.close()
             
     def run(self):
         """启动Kafka消费者"""
@@ -70,15 +93,28 @@ class KafkaConsumer(threading.Thread):
                         continue
 
                 # 发布消息到消息总线
+                headers = msg.headers() if msg.headers() else {}
+
+                # 格式化时间
+                ts_type, ts_ms = msg.timestamp()
+                if ts_ms > 0:
+                    timestamp_str = KafkaTimestampFormatter.format(
+                        ts_ms, 
+                        fmt="%Y-%m-%d %H:%M:%S",
+                        timezone="Asia/Shanghai"
+                    )
+                else:
+                    timestamp_str = "N/A"
                 message = {
-                    "source": "Kafka",
-                    "config_name": self.config['name'],
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "bootstrap_servers": self.config['bootstrap_servers'],
-                    "topic": msg.topic(),
-                    "partition": msg.partition(),
-                    "offset": msg.offset(),
-                    "raw_data": msg.value()
+                    "source":self.config['name'],
+                    "timestamp": timestamp_str,
+                    "raw_data": msg.value(),
+                    "content_type": headers.get('content_type', ''),
+                    "kafka_extra": {
+                        "topic": msg.topic(),
+                        "partition": msg.partition(),
+                        "offset": msg.offset(),
+                    }
                 }
                 self.message_bus.publish("message.received", message)
                 
