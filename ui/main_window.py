@@ -62,7 +62,10 @@ class MainWindow:
         
         # 创建消息区域
         self.create_message_area()
-        
+
+        # 消息列表监听标签页变化
+        self.tab_container.register_tab_change_callback(self.on_service_tab_changed)
+
     def create_service_area(self):
         """创建服务配置区域"""
         # 创建标签页容器
@@ -115,6 +118,21 @@ class MainWindow:
         
         # 绑定选择事件
         self.ui_msg_tree.bind("<<TreeviewSelect>>", self.on_message_select)
+
+    def on_service_tab_changed(self, selected_tab):
+        """服务切换事件处理"""
+        # 清空消息列表
+        self.ui_msg_tree.delete(*self.ui_msg_tree.get_children())
+
+        # 添加当前服务的消息
+        if selected_tab in self.messages:
+            for message in self.messages[selected_tab]:
+                self.add_message_to_tree(message)
+
+        # 清空消息详情
+        self.detail_text.config(state=NORMAL)
+        self.detail_text.delete(1.0, END)
+        self.detail_text.config(state=DISABLED)
         
     def create_message_detail(self, parent):
         """创建消息详情区域"""

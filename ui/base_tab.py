@@ -81,6 +81,9 @@ class CollapsibleNotebook(ttk.Frame):
         # 绑定标签切换事件
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
+        # 存储外部注册的回调函数
+        self.external_tab_change_callbacks = []  # 存储外部注册的回调函数
+
     def add_tab(self, tab_class: Type[BaseConfigTab]):
         """添加新的标签页"""
         # 创建标签页内容框架（可折叠部分）
@@ -102,16 +105,29 @@ class CollapsibleNotebook(ttk.Frame):
             self.tabs[tab_name].frame.pack(fill="both", expand=True)
         return tab
     
+    def register_tab_change_callback(self, callback):
+        """注册外部标签页切换回调函数"""
+        if not callable(callback):
+            raise TypeError("Callback must be a callable function")
+        self.external_tab_change_callbacks.append(callback)
+
     def on_tab_changed(self, event):
-        """当标签页切换时更新显示内容"""
-        # 获取当前选中的标签页名称
+        """当标签页切换时更新显示内容并调用外部回调"""
         selected_index = self.notebook.index(self.notebook.select())
         selected_tab = self.notebook.tab(selected_index, "text")
-        # 更新当前标签页
-        self.current_tab = selected_tab        # 如果处于展开状态，则更新显示
+        self.current_tab = selected_tab
+
+        # 更新显示内容
         if self.expanded:
             self._update_tab_display()
-    
+
+        # 调用外部注册的回调函数
+        for callback in self.external_tab_change_callbacks:
+            try:
+                callback(self.current_tab)
+            except Exception as e:
+                print(f"Error in external callback: {e}")
+
     def _update_tab_display(self):
         """更新标签页显示"""
         # 隐藏所有标签页内容
