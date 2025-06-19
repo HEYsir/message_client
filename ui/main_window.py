@@ -51,11 +51,8 @@ class MainWindow:
     def init_styles(self):
         pass
 
-    def create_sidebar(self):
+    def create_sidebar(self, sidebar_frame):
         """创建侧边栏"""
-        sidebar_frame = Frame(self.root, width=150, bg="lightgray")
-        sidebar_frame.pack(side=LEFT, fill=Y)
-
         # 消费监听按钮
         consume_button = ttk.Button(sidebar_frame, text="消费监听", command=self.on_consume_listen)
         consume_button.pack(fill=X, padx=5, pady=5)
@@ -63,10 +60,6 @@ class MainWindow:
         # 报文发送按钮
         send_button = ttk.Button(sidebar_frame, text="报文发送", command=self.on_message_send)
         send_button.pack(fill=X, padx=5, pady=5)
-
-        # 清除服务消息按钮
-        clear_button = ttk.Button(sidebar_frame, text="清除服务消息", command=self.on_clear_service_messages)
-        clear_button.pack(fill=X, padx=5, pady=5)
 
     def on_clear_service_messages(self):
         """清除当前选项卡服务的消息"""
@@ -84,47 +77,59 @@ class MainWindow:
             self.detail_text.config(state=DISABLED)
 
     def on_consume_listen(self):
-        """消费监听功能占位"""
-        print("消费监听功能")
+        """切换到消费监听页面"""
+        self.recived_paned.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        # 隐藏报文发送页面
+        self.message_send_frame.pack_forget()
 
     def on_message_send(self):
-        """报文发送功能占位"""
-        print("报文发送功能")
+        """切换到报文发送页面"""
+        self.recived_paned.pack_forget()  # 隐藏消息显示区域
+        # 显示报文发送页面
+        self.message_send_frame.pack(fill=BOTH, expand=True, padx=5, pady=5)
 
     def create_ui(self):
         """创建主UI框架"""
         # 创建侧边栏
-        self.create_sidebar()
+        sidebar_frame = Frame(self.root, width=150, bg="lightgray")
+        sidebar_frame.pack(side=LEFT, fill=Y)
+        self.create_sidebar(sidebar_frame)
 
-        # 创建主分割面板
-        self.main_paned = PanedWindow(self.root, orient=VERTICAL)
-        self.main_paned.pack(fill=BOTH, expand=True, padx=5, pady=5)
-        
-        # 创建服务配置区
-        self.create_service_area()
-        
-        # 创建消息区域
-        self.create_message_area()
+        # 创建消费监听区域
+        self.recived_paned = PanedWindow(self.root, orient=VERTICAL)
+        self.recived_paned.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.create_service_area(self.recived_paned)
+        self.create_message_area(self.recived_paned)
 
-        # 消息列表监听标签页变化
-        self.tab_container.register_tab_change_callback(self.on_service_tab_changed)
+        # 创建报文发送页面
+        self.message_send_frame = Frame(self.root)
+        self.message_send_frame.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        self.create_message_send_area(self.message_send_frame)
+        self.message_send_frame.pack_forget()  # 默认隐藏
 
-    def create_service_area(self):
+    def create_message_send_area(self, message_send_frame):
+        """创建报文发送页面"""
+        label = ttk.Label(message_send_frame, text="报文发送页面", font=("Arial", 16))
+        label.pack(pady=20)
+
+    def create_service_area(self, main_paned):
         """创建服务配置区域"""
         # 创建标签页容器
-        self.tab_container = CollapsibleNotebook(self.main_paned)
+        self.tab_container = CollapsibleNotebook(main_paned)
         self.tab_container.pack(fill="both", expand=True, padx=10, pady=10)
-        self.main_paned.add(self.tab_container)
+        main_paned.add(self.tab_container)
 
         # 加载所有已注册的配置页面
         for tab_class in self._config_tabs:
             self.tab_container.add_tab(tab_class)
+        # 消息列表监听标签页变化
+        self.tab_container.register_tab_change_callback(self.on_service_tab_changed)
   
-    def create_message_area(self):
+    def create_message_area(self, recived_paned):
         """创建消息显示区域"""
-        message_frame = Frame(self.main_paned)
-        self.main_paned.add(message_frame)
-        
+        message_frame = Frame(recived_paned)
+        recived_paned.add(message_frame)
+
         # 创建水平分割
         msg_paned = PanedWindow(message_frame, orient=HORIZONTAL)
         msg_paned.pack(fill=BOTH, expand=True, padx=5, pady=5)
@@ -152,6 +157,10 @@ class MainWindow:
         # 设置列
         self.setup_tree_columns()
         
+        # 清除服务消息按钮放在消息列表下方
+        clear_button = ttk.Button(list_frame, text="清除服务消息", command=self.on_clear_service_messages)
+        clear_button.pack(fill=X, padx=5, pady=5, side='bottom')
+
         # 滚动条
         scrollbar = ttk.Scrollbar(list_frame, orient=VERTICAL, command=self.ui_msg_tree.yview)
         self.ui_msg_tree.configure(yscroll=scrollbar.set)
