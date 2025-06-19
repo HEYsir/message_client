@@ -51,8 +51,51 @@ class MainWindow:
     def init_styles(self):
         pass
 
+    def create_sidebar(self):
+        """创建侧边栏"""
+        sidebar_frame = Frame(self.root, width=150, bg="lightgray")
+        sidebar_frame.pack(side=LEFT, fill=Y)
+
+        # 消费监听按钮
+        consume_button = ttk.Button(sidebar_frame, text="消费监听", command=self.on_consume_listen)
+        consume_button.pack(fill=X, padx=5, pady=5)
+
+        # 报文发送按钮
+        send_button = ttk.Button(sidebar_frame, text="报文发送", command=self.on_message_send)
+        send_button.pack(fill=X, padx=5, pady=5)
+
+        # 清除服务消息按钮
+        clear_button = ttk.Button(sidebar_frame, text="清除服务消息", command=self.on_clear_service_messages)
+        clear_button.pack(fill=X, padx=5, pady=5)
+
+    def on_clear_service_messages(self):
+        """清除当前选项卡服务的消息"""
+        selected_tab = self.tab_container.get_selected_tab()
+        if not selected_tab:
+            print("未选择任何服务")
+            return
+
+        confirm = tk.messagebox.askyesno("确认清除", f"是否清除当前服务[{selected_tab}]的消息？")
+        if confirm:
+            self.messages[selected_tab] = []
+            self.ui_msg_tree.delete(*self.ui_msg_tree.get_children())
+            self.detail_text.config(state=NORMAL)
+            self.detail_text.delete(1.0, END)
+            self.detail_text.config(state=DISABLED)
+
+    def on_consume_listen(self):
+        """消费监听功能占位"""
+        print("消费监听功能")
+
+    def on_message_send(self):
+        """报文发送功能占位"""
+        print("报文发送功能")
+
     def create_ui(self):
         """创建主UI框架"""
+        # 创建侧边栏
+        self.create_sidebar()
+
         # 创建主分割面板
         self.main_paned = PanedWindow(self.root, orient=VERTICAL)
         self.main_paned.pack(fill=BOTH, expand=True, padx=5, pady=5)

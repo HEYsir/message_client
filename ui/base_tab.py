@@ -155,4 +155,9 @@ class CollapsibleNotebook(ttk.Frame):
     
         # 重新布局父容器
         self.parent.update_idletasks()
+    
+    def get_selected_tab(self) -> str:
+        """获取当前选中的标签页名称"""
+        return self.current_tab if self.current_tab else ""
+
 
