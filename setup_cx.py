@@ -3,8 +3,14 @@ import sys
 import os
 import site
 
-# 自动查找 confluent_kafka.libs 目录
-site_packages = site.getsitepackages()[1] if hasattr(site, 'getsitepackages') else site.getusersitepackages()
+def get_real_site_packages():
+    # 虚拟环境优先用 getsitepackages
+    if hasattr(sys, 'base_prefix') and sys.prefix != sys.base_prefix:
+        return site.getsitepackages()[0]
+    # 非虚拟环境用 getusersitepackages
+    return site.getusersitepackages()
+
+site_packages = get_real_site_packages()
 ck_libs_src = os.path.join(site_packages, 'confluent_kafka.libs')
 ck_libs_dst = os.path.join('lib', 'confluent_kafka.libs')
 
@@ -35,6 +41,8 @@ build_exe_options = {
 
 # 调试模式：带控制台窗口，print输出可见
 base = None
+if sys.platform == "win32":
+    base = "Win32GUI"
 
 setup(
     name = "AlarmServer",
