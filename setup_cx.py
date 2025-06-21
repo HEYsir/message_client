@@ -6,7 +6,7 @@ import site
 def get_real_site_packages():
     # 虚拟环境优先用 getsitepackages
     if hasattr(sys, 'base_prefix') and sys.prefix != sys.base_prefix:
-        return site.getsitepackages()[0]
+        return site.getsitepackages()[1]
     # 非虚拟环境用 getusersitepackages
     return site.getusersitepackages()
 
@@ -15,7 +15,7 @@ ck_libs_src = os.path.join(site_packages, 'confluent_kafka.libs')
 ck_libs_dst = os.path.join('lib', 'confluent_kafka.libs')
 
 include_files = [
-    "application", "core", "ui", "downloads"
+    "application", "core", "ui"
 ]
 if os.path.exists(ck_libs_src):
     include_files.append((ck_libs_src, ck_libs_dst))
