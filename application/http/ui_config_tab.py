@@ -5,6 +5,7 @@ from ui.main_window import MainWindow
 import pyperclip
 from tkinter import messagebox
 from application.http.service import HTTPServer
+from .ip_utils import get_local_ip_list
 
 
 class HTTPConfigTab(BaseConfigTab):
@@ -27,16 +28,18 @@ class HTTPConfigTab(BaseConfigTab):
         # 主框架
         self.style = ttk.Style()
         self.style.configure('green.TFrame', background='green')
-        # frame = ttk.Frame(self.frame, style='green.TFrame')
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10)
 
         # 监听地址
         ttk.Label(frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.host_entry = ttk.Entry(frame)
-        self.host_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.host_entry.insert(0, self.config_vars.get("host", ""))
-        self.host_entry.bind("<KeyRelease>", self.update_url)
+        # IP下拉框
+        self.host_var = StringVar()
+        ip_list = get_local_ip_list()
+        self.host_combo = ttk.Combobox(frame, textvariable=self.host_var, values=ip_list, state="readonly")
+        self.host_combo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.host_combo.set(self.config_vars.get("host", ip_list[0] if ip_list else "0.0.0.0"))
+        self.host_combo.bind("<<ComboboxSelected>>", self.update_url)
 
         # 端口
         ttk.Label(frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
@@ -69,7 +72,7 @@ class HTTPConfigTab(BaseConfigTab):
 
     def update_url(self, event=None):
         """更新HTTP服务URL显示"""
-        self.server_url = f"http://{self.host_entry.get().strip()}:{self.port_entry.get().strip()}/httpalarm"
+        self.server_url = f"http://{self.host_var.get()}:{self.port_entry.get().strip()}/httpalarm"
         self.url_label.config(text=self.server_url)
 
     def copy_url_to_clipboard(self, event=None):
@@ -86,14 +89,14 @@ class HTTPConfigTab(BaseConfigTab):
         if self.config_vars["status"] == "运行中":
             self.stop_service()
             # 启用 host 和 port 输入框
-            self.host_entry.config(state="normal")
+            self.host_combo.config(state="normal")
             self.port_entry.config(state="normal")
         else:
-            self.config_vars["host"] = self.host_entry.get().strip()
+            self.config_vars["host"] = self.host_var.get().strip()
             self.config_vars["port"] = self.port_entry.get().strip()
             self.start_service()
             # 禁用 host 和 port 输入框
-            self.host_entry.config(state="disabled")
+            self.host_combo.config(state="disabled")
             self.port_entry.config(state="disabled")
 
     def start_service(self):
