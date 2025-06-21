@@ -21,7 +21,6 @@ class KafkaConfigTab(BaseConfigTab):
             "sasl_username": "",
             "sasl_password": "",
             "ssl_ca_location": "",
-            "download_dir": "./kafka_downloads",
             "kafka_ssl_entry":"",
             "status": "已停止"
         })
@@ -72,15 +71,15 @@ class KafkaConfigTab(BaseConfigTab):
         )
         self.tls_checkbox.grid(row=0, column=5, padx=5, pady=5, sticky="w")
         # SSL CA路径
-        kafka_ssl_entry = ttk.Entry(frame, state='readonly')
-        kafka_ssl_entry.grid(row=1, column=5, columnspan=2, padx=5, pady=5, sticky="ew")
-        kafka_ssl_entry.insert(0, self.config_vars.get("ssl_ca_location", ""))
+        self.kafka_ssl_entry = ttk.Entry(frame, state='readonly')
+        self.kafka_ssl_entry.grid(row=1, column=5, columnspan=2, padx=5, pady=5, sticky="ew")
+        self.kafka_ssl_entry.insert(0, self.config_vars.get("ssl_ca_location", ""))
         # 浏览按钮
         self.ssl_browse_btn = ttk.Button(
             frame, 
             text="CA路径", 
             width=8,
-            command=lambda: self.browse_file(kafka_ssl_entry)
+            command=lambda: self.browse_file(self.kafka_ssl_entry)
         )
         self.ssl_browse_btn.grid(row=0, column=6, padx=5, pady=0)
         
@@ -120,7 +119,7 @@ class KafkaConfigTab(BaseConfigTab):
                 self.config_vars["sasl_username"] = ""
                 self.config_vars["sasl_password"] = ""
             if self.tls_checkbox_var.get():
-                self.config_vars["ssl_ca_location"] = self.ssl_browse_btn.cget("text")
+                self.config_vars["ssl_ca_location"] = self.kafka_ssl_entry.get()
             else:
                 self.config_vars["ssl_ca_location"] = ""
 

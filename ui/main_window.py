@@ -241,7 +241,7 @@ class MainWindow:
         
   
         self.detail_text.insert(END, self.current_message.get("source"))
-        self.detail_text.insert(END, f"\n来源IP: {self.current_message.get('ip', "N/A")}\n")
+        self.detail_text.insert(END, f"\n来源IP: {self.current_message.get('ip', 'N/A')}\n")
         
         self.detail_text.insert(END, f"接收时间: {self.current_message['timestamp']}\n")
         self.detail_text.insert(END, "-" * 80 + "\n\n")

@@ -54,7 +54,6 @@ class KafkaConsumer(threading.Thread):
             # 添加安全配置
             if self.config.get('sasl_username') and self.config.get('sasl_password'):
                 conf.update({
-                    'security.protocol': 'SASL_PLAINTEXT',
                     'sasl.mechanism': 'PLAIN',
                     'sasl.username': self.config['sasl_username'],
                     'sasl.password': self.config['sasl_password']
@@ -62,8 +61,16 @@ class KafkaConsumer(threading.Thread):
                 
             if self.config.get('ssl_ca_location'):
                 conf['ssl.ca.location'] = self.config['ssl_ca_location']
+                conf['ssl.endpoint.identification.algorithm'] = 'none'  # 禁用主机名验证
+                conf['enable.ssl.certificate.verification'] = False    # 禁用证书验证
+
+            if self.config.get('sasl_username') and self.config.get('sasl_password') and self.config.get('ssl_ca_location'):
+                conf['security.protocol'] = 'SASL_SSL'
+            elif self.config.get('sasl_username') and self.config.get('sasl_password'):
+                conf['security.protocol'] = 'SASL_PLAIN'
+            elif self.config.get('ssl_ca_location'):
                 conf['security.protocol'] = 'SSL'
-            
+
             # 创建消费者
             self.consumer = Consumer(conf)
             topics = [t.strip() for t in self.config['topics'].split(',')]
