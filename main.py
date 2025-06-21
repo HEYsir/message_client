@@ -4,6 +4,9 @@ import importlib
 from tkinter import Tk
 from ui.main_window import MainWindow
 
+import application.http.ui_config_tab
+import application.kafka.ui_config_tab
+import application.rmq.ui_config_tab
 
 def discover_config_tabs():
     """自动发现并导入所有配置标签页，兼容cx_Freeze打包路径"""
@@ -25,12 +28,13 @@ def discover_config_tabs():
                 print(f"[discover_config_tabs] Try import: {module_path}")
                 try:
                     importlib.import_module(module_path)
+                    print(f"[discover_config_tabs] Successfully imported: {module_path}")
                 except (ImportError, SyntaxError) as e:
                     print(f"Error: Could not load config tab from {module_path}: {e}")
 
 def main():
     # 发现并加载所有配置标签页
-    discover_config_tabs()
+    # discover_config_tabs()
 
     # 创建主窗口
     root = Tk()

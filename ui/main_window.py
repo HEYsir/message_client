@@ -29,7 +29,7 @@ class MainWindow:
         self.root.geometry("1200x800")
         self.message_bus = MessageBus()
         self.config_tab_instances: Dict[str, BaseConfigTab] = {}
-        self.image_handler = ImageHandler('./downloads')
+        # self.image_handler = ImageHandler('./downloads')
 
         # 初始化自定义样式
         self.init_styles()
