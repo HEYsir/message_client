@@ -353,34 +353,52 @@ class MainWindow:
 class SendMessageConfigTab(BaseConfigTab):
     def _init_config_vars(self):
         self.config_vars.update({
-            "name": "发送消息",
-            "url": "http://127.0.0.1:8000/",
-            "body": "{\"msg\":\"hello\"}",
+            "name": "HTTP消息发送",
+            "host": "0.0.0.0",
+            "port": "8000",
+            "url_path": "/httpalarm",
+            "body": '{"msg":"hello"}',
             "result": ""
         })
 
     def create_tab_content(self):
+        # 与 HTTPConfigTab 配置区一致
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="目标URL:").grid(row=0, column=0, sticky="e")
-        self.url_entry = ttk.Entry(frame, width=40)
-        self.url_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.url_entry.insert(0, self.config_vars["url"])
-        ttk.Label(frame, text="消息体(JSON):").grid(row=1, column=0, sticky="ne")
+        ttk.Label(frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.host_var = tk.StringVar(value=self.config_vars["host"])
+        ip_list = [self.config_vars["host"]]
+        self.host_combo = ttk.Combobox(frame, textvariable=self.host_var, values=ip_list, state="readonly")
+        self.host_combo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.port_entry = ttk.Entry(frame, width=8)
+        self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        self.port_entry.insert(0, self.config_vars["port"])
+        ttk.Label(frame, text="路径:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
+        self.path_entry = ttk.Entry(frame, width=16)
+        self.path_entry.grid(row=0, column=5, padx=5, pady=5, sticky="w")
+        self.path_entry.insert(0, self.config_vars["url_path"])
+        # 消息体
+        ttk.Label(frame, text="消息体(JSON):").grid(row=1, column=0, sticky="ne", padx=5, pady=5)
         self.body_text = tk.Text(frame, width=60, height=8)
-        self.body_text.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.body_text.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
         self.body_text.insert(1.0, self.config_vars["body"])
+        # 发送按钮
         self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
-        self.send_btn.grid(row=2, column=1, sticky="e", pady=10)
-        ttk.Label(frame, text="响应结果:").grid(row=3, column=0, sticky="ne")
+        self.send_btn.grid(row=2, column=5, sticky="e", pady=10)
+        # 响应结果
+        ttk.Label(frame, text="响应结果:").grid(row=3, column=0, sticky="ne", padx=5, pady=5)
         self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
+        self.result_text.grid(row=3, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
 
     def update_status(self, status):
         pass
 
     def send_message(self):
-        url = self.url_entry.get()
+        host = self.host_var.get()
+        port = self.port_entry.get()
+        path = self.path_entry.get()
+        url = f"http://{host}:{port}{path}"
         body = self.body_text.get(1.0, END).strip()
         try:
             poster = FastHTTPPost(url)
@@ -407,27 +425,30 @@ class SendKafkaMessageConfigTab(BaseConfigTab):
     def create_tab_content(self):
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="Bootstrap Servers:").grid(row=0, column=0, sticky="e")
+        ttk.Label(frame, text="服务地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         self.servers_entry = ttk.Entry(frame, width=40)
         self.servers_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self.servers_entry.insert(0, self.config_vars["bootstrap_servers"])
-        ttk.Label(frame, text="Topic:").grid(row=1, column=0, sticky="e")
-        self.topic_entry = ttk.Entry(frame, width=40)
-        self.topic_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(frame, text="主题:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.topic_entry = ttk.Entry(frame, width=24)
+        self.topic_entry.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
         self.topic_entry.insert(0, self.config_vars["topic"])
-        ttk.Label(frame, text="Key(Optional):").grid(row=2, column=0, sticky="e")
-        self.key_entry = ttk.Entry(frame, width=40)
-        self.key_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(frame, text="Key(Optional):").grid(row=0, column=4, padx=5, pady=5, sticky="e")
+        self.key_entry = ttk.Entry(frame, width=16)
+        self.key_entry.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
         self.key_entry.insert(0, self.config_vars["key"])
-        ttk.Label(frame, text="消息体(JSON):").grid(row=3, column=0, sticky="ne")
+        # 消息体
+        ttk.Label(frame, text="消息体(JSON):").grid(row=1, column=0, sticky="ne", padx=5, pady=5)
         self.body_text = tk.Text(frame, width=60, height=8)
-        self.body_text.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
+        self.body_text.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
         self.body_text.insert(1.0, self.config_vars["body"])
+        # 发送按钮
         self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
-        self.send_btn.grid(row=4, column=1, sticky="e", pady=10)
-        ttk.Label(frame, text="响应结果:").grid(row=5, column=0, sticky="ne")
+        self.send_btn.grid(row=2, column=5, sticky="e", pady=10)
+        # 响应结果
+        ttk.Label(frame, text="响应结果:").grid(row=3, column=0, sticky="ne", padx=5, pady=5)
         self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
+        self.result_text.grid(row=3, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
 
     def update_status(self, status):
         pass
@@ -465,35 +486,38 @@ class SendRMQMessageConfigTab(BaseConfigTab):
     def create_tab_content(self):
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="Host:").grid(row=0, column=0, sticky="e")
-        self.host_entry = ttk.Entry(frame, width=30)
+        ttk.Label(frame, text="主机地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.host_entry = ttk.Entry(frame, width=24)
         self.host_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self.host_entry.insert(0, self.config_vars["host"])
-        ttk.Label(frame, text="Port:").grid(row=1, column=0, sticky="e")
-        self.port_entry = ttk.Entry(frame, width=10)
-        self.port_entry.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+        ttk.Label(frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.port_entry = ttk.Entry(frame, width=8)
+        self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
         self.port_entry.insert(0, str(self.config_vars["port"]))
-        ttk.Label(frame, text="Queue:").grid(row=2, column=0, sticky="e")
-        self.queue_entry = ttk.Entry(frame, width=30)
-        self.queue_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(frame, text="队列名称:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
+        self.queue_entry = ttk.Entry(frame, width=16)
+        self.queue_entry.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
         self.queue_entry.insert(0, self.config_vars["queue"])
-        ttk.Label(frame, text="Username:").grid(row=3, column=0, sticky="e")
-        self.user_entry = ttk.Entry(frame, width=20)
-        self.user_entry.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+        ttk.Label(frame, text="用户名:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.user_entry = ttk.Entry(frame, width=16)
+        self.user_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
         self.user_entry.insert(0, self.config_vars["username"])
-        ttk.Label(frame, text="Password:").grid(row=4, column=0, sticky="e")
-        self.pass_entry = ttk.Entry(frame, width=20, show="*")
-        self.pass_entry.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+        ttk.Label(frame, text="密码:").grid(row=1, column=2, padx=5, pady=5, sticky="e")
+        self.pass_entry = ttk.Entry(frame, width=16, show="*")
+        self.pass_entry.grid(row=1, column=3, padx=5, pady=5, sticky="ew")
         self.pass_entry.insert(0, self.config_vars["password"])
-        ttk.Label(frame, text="消息体(JSON):").grid(row=5, column=0, sticky="ne")
+        # 消息体
+        ttk.Label(frame, text="消息体(JSON):").grid(row=2, column=0, sticky="ne", padx=5, pady=5)
         self.body_text = tk.Text(frame, width=60, height=8)
-        self.body_text.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
+        self.body_text.grid(row=2, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
         self.body_text.insert(1.0, self.config_vars["body"])
+        # 发送按钮
         self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
-        self.send_btn.grid(row=6, column=1, sticky="e", pady=10)
-        ttk.Label(frame, text="响应结果:").grid(row=7, column=0, sticky="ne")
+        self.send_btn.grid(row=3, column=5, sticky="e", pady=10)
+        # 响应结果
+        ttk.Label(frame, text="响应结果:").grid(row=4, column=0, sticky="ne", padx=5, pady=5)
         self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(row=7, column=1, padx=5, pady=5, sticky="ew")
+        self.result_text.grid(row=4, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
 
     def update_status(self, status):
         pass
