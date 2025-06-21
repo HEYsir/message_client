@@ -362,34 +362,41 @@ class SendMessageConfigTab(BaseConfigTab):
         })
 
     def create_tab_content(self):
-        # 与 HTTPConfigTab 配置区一致
+        # 与 HTTPConfigTab 配置区一致，消息体和应答区左右布局
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        # 顶部配置区
+        top_frame = ttk.Frame(frame)
+        top_frame.pack(fill="x", padx=5, pady=5)
+        ttk.Label(top_frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         self.host_var = tk.StringVar(value=self.config_vars["host"])
         ip_list = [self.config_vars["host"]]
-        self.host_combo = ttk.Combobox(frame, textvariable=self.host_var, values=ip_list, state="readonly")
+        self.host_combo = ttk.Combobox(top_frame, textvariable=self.host_var, values=ip_list, state="readonly")
         self.host_combo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Label(frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.port_entry = ttk.Entry(frame, width=8)
+        ttk.Label(top_frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.port_entry = ttk.Entry(top_frame, width=8)
         self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
         self.port_entry.insert(0, self.config_vars["port"])
-        ttk.Label(frame, text="路径:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
-        self.path_entry = ttk.Entry(frame, width=16)
+        ttk.Label(top_frame, text="路径:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
+        self.path_entry = ttk.Entry(top_frame, width=16)
         self.path_entry.grid(row=0, column=5, padx=5, pady=5, sticky="w")
         self.path_entry.insert(0, self.config_vars["url_path"])
-        # 消息体
-        ttk.Label(frame, text="消息体(JSON):").grid(row=1, column=0, sticky="ne", padx=5, pady=5)
-        self.body_text = tk.Text(frame, width=60, height=8)
-        self.body_text.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
+        # 主体左右分割区
+        main_paned = PanedWindow(frame, orient=HORIZONTAL)
+        main_paned.pack(fill="both", expand=True, padx=5, pady=5)
+        # 左侧：消息体
+        left_frame = ttk.LabelFrame(main_paned, text="消息体(JSON)")
+        self.body_text = tk.Text(left_frame, width=40, height=12)
+        self.body_text.pack(fill="both", expand=True, padx=5, pady=5)
         self.body_text.insert(1.0, self.config_vars["body"])
-        # 发送按钮
-        self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
-        self.send_btn.grid(row=2, column=5, sticky="e", pady=10)
-        # 响应结果
-        ttk.Label(frame, text="响应结果:").grid(row=3, column=0, sticky="ne", padx=5, pady=5)
-        self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(row=3, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
+        self.send_btn = ttk.Button(left_frame, text="发送消息", command=self.send_message)
+        self.send_btn.pack(anchor="se", padx=5, pady=5)
+        main_paned.add(left_frame)
+        # 右侧：响应结果
+        right_frame = ttk.LabelFrame(main_paned, text="响应结果")
+        self.result_text = tk.Text(right_frame, width=40, height=12, state=DISABLED)
+        self.result_text.pack(fill="both", expand=True, padx=5, pady=5)
+        main_paned.add(right_frame)
 
     def update_status(self, status):
         pass
