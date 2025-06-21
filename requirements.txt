@@ -4,3 +4,4 @@ requests
 confluent_kafka
 pika
 pytz
+cx_freeze
