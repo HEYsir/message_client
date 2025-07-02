@@ -1,5 +1,7 @@
 from tkinter import *
 from tkinter import ttk
+from tkinter import messagebox
+
 from ui.base_tab import BaseConfigTab
 from ui.main_window import MainWindow
 from application.kafka.service import KafkaConsumer
@@ -14,12 +16,12 @@ class KafkaConfigTab(BaseConfigTab):
         """初始化配置变量"""
         self.config_vars.update({
             "name": "Kafka服务",
-            "bootstrap_servers": "10.41.63.199:9092",
+            "bootstrap_servers": "10.19.187.180:29092",
             "topics": "STATIC_HUMAN_EXCEPTION_TOPIC",
-            "group_id": "test123456789",
+            "group_id": "",
             "auto_offset_reset": "earliest",
-            "sasl_username": "",
-            "sasl_password": "",
+            "sasl_username": "kafka",
+            "sasl_password": "+X3bUZ+*+IGn*jH1",
             "ssl_ca_location": "",
             "kafka_ssl_entry":"",
             "status": "已停止"
@@ -83,6 +85,12 @@ class KafkaConfigTab(BaseConfigTab):
         )
         self.ssl_browse_btn.grid(row=0, column=6, padx=5, pady=0)
         
+        # SASL用户名
+        ttk.Label(frame, text="消费组ID:").grid(row=0, column=7, padx=5, pady=5, sticky="e")
+        self.kafka_groupid_entry = ttk.Entry(frame)
+        self.kafka_groupid_entry.grid(row=0, column=8, padx=5, pady=5, sticky="ew")
+        self.kafka_groupid_entry.insert(0, self.config_vars.get("group_id", ""))
+
         # 操作按钮
         btn_frame = Frame(frame)
         btn_frame.grid(row=1, column=7, sticky="e", padx=5, pady=0)
@@ -111,6 +119,10 @@ class KafkaConfigTab(BaseConfigTab):
         else:
             self.config_vars["bootstrap_servers"] = self.kafka_servers_entry.get()
             self.config_vars["topics"] = self.kafka_topics_entry.get()
+            self.config_vars["group_id"] = self.kafka_groupid_entry.get().strip()
+            if 0 == len(self.config_vars["group_id"]):
+                messagebox.showerror("参数未配置", f"消费组ID必须填写")
+                return
             # 启动消费者
             if self.sasl_checkbox_var.get():
                 self.config_vars["sasl_username"] = self.kafka_user_entry.get()
