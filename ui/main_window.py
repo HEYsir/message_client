@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, PanedWindow, Frame, BOTH, LEFT, RIGHT, VERTICAL, HORIZONTAL, END, WORD, X, Y, DISABLED,NORMAL
 from tkinter import scrolledtext
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 from core.message_bus import MessageBus
 from typing import Type, Dict, List
 from ui.base_tab import BaseConfigTab, CollapsibleNotebook
@@ -245,8 +245,9 @@ class MainWindow:
         )
         self.image_info_label.pack(fill=X, padx=10, pady=5)
         
-    def display_image(self, image_path: str):
-        """显示图片"""
+    def display_image(self, image_info: dict):
+        """显示图片，并绘制rectList中的矩形框和标记信息"""
+        image_path = image_info['filename']
         if not image_path or not os.path.exists(image_path):
             self.clear_image()
             return
@@ -254,18 +255,58 @@ class MainWindow:
         try:
             # 加载图片
             image = Image.open(image_path)
+            original_width, original_height = image.size
             
             # 调整图片大小以适应显示区域
             max_width = 400
             max_height = 300
             
             # 计算缩放比例
-            width, height = image.size
-            scale = min(max_width/width, max_height/height, 1.0)
+            scale = min(max_width/original_width, max_height/original_height, 1.0)
             
             if scale < 1.0:
-                new_size = (int(width * scale), int(height * scale))
+                new_size = (int(original_width * scale), int(original_height * scale))
                 image = image.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # 如果有rectList，绘制矩形框和标记
+            if 'rectList' in image_info and image_info['rectList']:
+                # 创建可绘制的图像副本
+                drawable_image = image.copy()
+                draw = ImageDraw.Draw(drawable_image)
+                
+                # 尝试加载字体，如果失败则使用默认字体
+                try:
+                    font = ImageFont.truetype("arial.ttf", 12)
+                except:
+                    font = ImageFont.load_default()
+                
+                # 绘制每个矩形框
+                for i, rect_info in enumerate(image_info['rectList']):
+                    if rect_info['type'] == 'rect':
+                        rect_data = rect_info['rect']
+                        marks = rect_info.get('marks', [])
+                        
+                        # 将相对坐标转换为绝对坐标
+                        x1 = int(rect_data['x'] * drawable_image.width)
+                        y1 = int(rect_data['y'] * drawable_image.height)
+                        x2 = int((rect_data['x'] + rect_data['width']) * drawable_image.width)
+                        y2 = int((rect_data['y'] + rect_data['height']) * drawable_image.height)
+                        
+                        # 绘制矩形框（红色边框）
+                        draw.rectangle([x1, y1, x2, y2], outline='red', width=2)
+                        
+                        # 绘制标记信息
+                        text_y = y1 - 20 if y1 > 30 else y2 + 5
+                        for j, mark in enumerate(marks):
+                            text = f"{mark['name']}: {mark['value']}"
+                            # 绘制文本背景
+                            bbox = draw.textbbox((x1, text_y + j*15), text, font=font)
+                            draw.rectangle(bbox, fill='red')
+                            # 绘制文本
+                            draw.text((x1, text_y + j*15), text, fill='white', font=font)
+                
+                # 使用绘制后的图像
+                image = drawable_image
             
             # 转换为Tkinter可显示的格式
             photo = ImageTk.PhotoImage(image)
@@ -277,8 +318,13 @@ class MainWindow:
             # 更新图片信息
             file_size = os.path.getsize(image_path)
             file_size_kb = file_size / 1024
-            image_info = f"尺寸: {image.size[0]}x{image.size[1]} | 大小: {file_size_kb:.1f}KB"
-            self.image_info_label.config(text=image_info)
+            
+            rect_info = ""
+            if 'rectList' in image_info and image_info['rectList']:
+                rect_info = f" | 检测到 {len(image_info['rectList'])} 个目标"
+            
+            image_info_text = f"尺寸: {original_width}x{original_height} | 大小: {file_size_kb:.1f}KB{rect_info}"
+            self.image_info_label.config(text=image_info_text)
             
             self.current_image_path = image_path
             
@@ -340,7 +386,8 @@ class MainWindow:
         self.detail_text.insert(END, "-" * 80 + "\n\n")
         
         # 提取图片信息并下载
-        parser = ParserRegistry.get_parser('basealarm')
+        print(self.current_message["parsed_data"]["event_type"])
+        parser = ParserRegistry.get_parser(self.current_message["parsed_data"]["event_type"])
         image_info = parser.extract_image_info(self.current_message["parsed_data"])
         if image_info:
             # 显示图片下载信息
@@ -356,7 +403,7 @@ class MainWindow:
             )
             
             # 启动图片检查任务
-            self.check_image_download(os.path.join('./downloads', image_info['filename']))
+            self.check_image_download(image_info)
                 
         parsed_data = self.current_message["parsed_data"]
         
@@ -384,18 +431,32 @@ class MainWindow:
             
         self.detail_text.config(state=DISABLED)
         
-    def check_image_download(self, image_path):
+    def check_image_download(self, image_info):
         """检查图片下载状态"""
-        if os.path.exists(image_path):
-            # 图片已下载完成，显示图片
-            self.display_image(image_path)
-            # 更新消息详情显示下载完成
-            self.detail_text.config(state=NORMAL)
-            self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
-            self.detail_text.config(state=DISABLED)
-        else:
-            # 图片还未下载完成，继续检查
-            self.root.after(500, lambda: self.check_image_download(image_path))
+        print(f"检查图片下载状态: {image_info}")
+        try:
+            # 构建完整的图片路径
+            image_filename = image_info['filename']
+            image_path = os.path.join('./downloads', image_filename)
+            print(f"图片路径: {image_path}")
+            
+            if os.path.exists(image_path):
+                # 图片已下载完成，显示图片
+                print(f"图片已存在，开始显示: {image_path}")
+                # 更新image_info中的filename为完整路径
+                image_info['filename'] = image_path
+                self.display_image(image_info)
+                # 更新消息详情显示下载完成
+                self.detail_text.config(state=NORMAL)
+                self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
+                self.detail_text.config(state=DISABLED)
+            else:
+                # 图片还未下载完成，继续检查
+                print(f"图片不存在，继续检查: {image_path}")
+                self.root.after(500, lambda: self.check_image_download(image_info))
+        except Exception as e:
+            print(f"检查图片下载状态时出错: {e}")
+            print(f"image_info类型: {type(image_info)}, 值: {image_info}")
         
     def on_message_received(self, message):
         """处理接收到的消息"""
