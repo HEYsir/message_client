@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, PanedWindow, Frame, BOTH, LEFT, RIGHT, VERTICAL, HORIZONTAL, END, WORD, X, Y, DISABLED,NORMAL
 from tkinter import scrolledtext
+from PIL import Image, ImageTk
 from core.message_bus import MessageBus
 from typing import Type, Dict, List
 from ui.base_tab import BaseConfigTab, CollapsibleNotebook
@@ -9,6 +10,7 @@ import xml.dom.minidom
 import json
 import html
 import re
+import os
 
 from core.protocol_parser import ParserRegistry
 from core.image_handler import ImageHandler
@@ -29,10 +31,10 @@ class MainWindow:
     def __init__(self, root):
         self.root = root
         self.root.title("报警服务监控工具")
-        self.root.geometry("1200x800")
+        self.root.geometry("1600x800")
         self.message_bus = MessageBus()
         self.config_tab_instances: Dict[str, BaseConfigTab] = {}
-        # self.image_handler = ImageHandler('./downloads')
+        self.image_handler = ImageHandler('./downloads')
 
         # 初始化自定义样式
         self.init_styles()
@@ -40,6 +42,10 @@ class MainWindow:
         # 存储消息列表
         self.messages = {}  # source -> [messages]
         self.current_message = None
+        
+        # 图片相关属性
+        self.current_image_path = None
+        self.image_label = None
         
         # 初始化UI
         self.create_ui()
@@ -49,7 +55,6 @@ class MainWindow:
         self.message_bus.subscribe("service.status", self.on_status_received)
 
         # 启动消息处理
-
         self.process_messages()
     def init_styles(self):
         pass
@@ -78,6 +83,7 @@ class MainWindow:
             self.detail_text.config(state=NORMAL)
             self.detail_text.delete(1.0, END)
             self.detail_text.config(state=DISABLED)
+            self.clear_image()
 
     def on_consume_listen(self):
         """切换到消费监听页面"""
@@ -141,11 +147,11 @@ class MainWindow:
         msg_paned = PanedWindow(message_frame, orient=HORIZONTAL)
         msg_paned.pack(fill=BOTH, expand=True, padx=5, pady=5)
         
-        # # 消息列表
+        # 消息列表
         self.create_message_list(msg_paned)
         
-        # # 消息详情
-        self.create_message_detail(msg_paned)
+        # 消息详情和图片显示区域
+        self.create_message_detail_and_image(msg_paned)
         
     def create_message_list(self, parent):
         """创建消息列表"""
@@ -188,15 +194,21 @@ class MainWindow:
             for message in self.messages[selected_tab]:
                 self.add_message_to_tree(message)
 
-        # 清空消息详情
+        # 清空消息详情和图片显示
         self.detail_text.config(state=NORMAL)
         self.detail_text.delete(1.0, END)
         self.detail_text.config(state=DISABLED)
+        self.clear_image()
         
-    def create_message_detail(self, parent):
-        """创建消息详情区域"""
-        detail_frame = ttk.LabelFrame(parent, text="消息详情")
-        parent.add(detail_frame)
+    def create_message_detail_and_image(self, parent):
+        """创建消息详情和图片显示区域"""
+        # 创建水平分割，分为消息详情和图片预览两部分
+        detail_image_paned = PanedWindow(parent, orient=HORIZONTAL)
+        parent.add(detail_image_paned)
+        
+        # 消息详情区域（左侧）
+        detail_frame = ttk.LabelFrame(detail_image_paned, text="消息详情")
+        detail_image_paned.add(detail_frame, minsize=400)
         
         self.detail_text = scrolledtext.ScrolledText(
             detail_frame,
@@ -207,6 +219,78 @@ class MainWindow:
         )
         self.detail_text.pack(fill=BOTH, expand=True)
         self.detail_text.config(state=DISABLED)
+        
+        # 图片显示区域（右侧）
+        image_frame = ttk.LabelFrame(detail_image_paned, text="图片预览")
+        detail_image_paned.add(image_frame, minsize=400)
+        
+        # 图片显示标签
+        self.image_label = tk.Label(
+            image_frame,
+            text="暂无图片",
+            font=("Arial", 12),
+            bg="white",
+            relief="sunken",
+            width=40,
+            height=20
+        )
+        self.image_label.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        
+        # 图片信息标签
+        self.image_info_label = tk.Label(
+            image_frame,
+            text="",
+            font=("Arial", 10),
+            fg="gray"
+        )
+        self.image_info_label.pack(fill=X, padx=10, pady=5)
+        
+    def display_image(self, image_path: str):
+        """显示图片"""
+        if not image_path or not os.path.exists(image_path):
+            self.clear_image()
+            return
+            
+        try:
+            # 加载图片
+            image = Image.open(image_path)
+            
+            # 调整图片大小以适应显示区域
+            max_width = 400
+            max_height = 300
+            
+            # 计算缩放比例
+            width, height = image.size
+            scale = min(max_width/width, max_height/height, 1.0)
+            
+            if scale < 1.0:
+                new_size = (int(width * scale), int(height * scale))
+                image = image.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # 转换为Tkinter可显示的格式
+            photo = ImageTk.PhotoImage(image)
+            
+            # 更新图片标签
+            self.image_label.config(image=photo, text="")
+            self.image_label.image = photo  # 保持引用
+            
+            # 更新图片信息
+            file_size = os.path.getsize(image_path)
+            file_size_kb = file_size / 1024
+            image_info = f"尺寸: {image.size[0]}x{image.size[1]} | 大小: {file_size_kb:.1f}KB"
+            self.image_info_label.config(text=image_info)
+            
+            self.current_image_path = image_path
+            
+        except Exception as e:
+            print(f"显示图片失败: {e}")
+            self.clear_image()
+            
+    def clear_image(self):
+        """清除图片显示"""
+        self.image_label.config(image="", text="暂无图片")
+        self.image_info_label.config(text="")
+        self.current_image_path = None
         
     def setup_tree_columns(self):
         """设置树形视图列"""
@@ -246,6 +330,8 @@ class MainWindow:
         self.detail_text.config(state=NORMAL)
         self.detail_text.delete(1.0, END)
         
+        # 清除当前图片显示
+        self.clear_image()
   
         self.detail_text.insert(END, self.current_message.get("source"))
         self.detail_text.insert(END, f"\n来源IP: {self.current_message.get('ip', 'N/A')}\n")
@@ -253,13 +339,24 @@ class MainWindow:
         self.detail_text.insert(END, f"接收时间: {self.current_message['timestamp']}\n")
         self.detail_text.insert(END, "-" * 80 + "\n\n")
         
-        # 提取图片信息
-        # image_info = parser.extract_image_info(parsed_data)
-        # if image_info:
-        #     self.image_handler.async_download(
-        #         image_info['url'],
-        #         image_info['filename']
-        #     )
+        # 提取图片信息并下载
+        parser = ParserRegistry.get_parser('basealarm')
+        image_info = parser.extract_image_info(self.current_message["parsed_data"])
+        if image_info:
+            # 显示图片下载信息
+            self.detail_text.insert(END, f"检测到图片URL: {image_info['url']}\n")
+            self.detail_text.insert(END, f"图片文件名: {image_info['filename']}\n")
+            self.detail_text.insert(END, "正在下载图片...\n")
+            self.detail_text.insert(END, "-" * 80 + "\n\n")
+            
+            # 异步下载图片
+            self.image_handler.async_download(
+                image_info['url'],
+                image_info['filename']
+            )
+            
+            # 启动图片检查任务
+            self.check_image_download(os.path.join('./downloads', image_info['filename']))
                 
         parsed_data = self.current_message["parsed_data"]
         
@@ -286,6 +383,19 @@ class MainWindow:
             self.detail_text.insert(END, raw_str)
             
         self.detail_text.config(state=DISABLED)
+        
+    def check_image_download(self, image_path):
+        """检查图片下载状态"""
+        if os.path.exists(image_path):
+            # 图片已下载完成，显示图片
+            self.display_image(image_path)
+            # 更新消息详情显示下载完成
+            self.detail_text.config(state=NORMAL)
+            self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
+            self.detail_text.config(state=DISABLED)
+        else:
+            # 图片还未下载完成，继续检查
+            self.root.after(500, lambda: self.check_image_download(image_path))
         
     def on_message_received(self, message):
         """处理接收到的消息"""

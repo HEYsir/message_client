@@ -89,13 +89,20 @@ class BaseAlarmParser(ProtocolParser):
             ns = {"ns": "http://www.isapi.org/ver20/XMLSchema"}
             
             url = root.find('.//ns:visibleLightURL', ns)
-            if url is not None:
+            if url is None:
+                # 尝试不使用命名空间
+                url = root.find('.//visibleLightURL')
+            
+            if url is not None and url.text:
+                # 生成唯一的文件名
+                import uuid
+                filename = f"image_{uuid.uuid4().hex[:8]}_{parsed_data['timestamp'].replace(':', '').replace('-', '')}.jpg"
                 return {
                     "url": url.text,
-                    "filename": f"{parsed_data['task_id']}_{parsed_data['timestamp']}.jpg"
+                    "filename": filename
                 }
-        except:
-            pass
+        except Exception as e:
+            print(f"提取图片信息失败: {e}")
         return None
 
 # 注册解析器
