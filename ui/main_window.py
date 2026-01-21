@@ -818,13 +818,13 @@ class MainWindow:
         source = item["values"][1]
         timestamp = item["values"][0]
         
-        # 查找对应消息
+        # 查找对应消息 - 使用UUID作为唯一标识
         selected_message = None
         if source in self.messages:
-            for msg in self.messages[source]:
-                if msg["timestamp"] == timestamp:
-                    selected_message = msg
-                    break
+            # 获取树形视图项中存储的UUID（如果有的话）
+            item_uuid = item["tags"][0]
+            selected_message = self.message_uuid_map.get(item_uuid)
+
         
         if not selected_message:
             return
@@ -1081,14 +1081,17 @@ class MainWindow:
         
     def add_message_to_tree(self, message):
         """添加消息到列表"""
-
-        self.ui_msg_tree.insert("", "end", values=(
+        # 将消息UUID作为标签存储在树形视图项中，用于唯一标识
+        item = self.ui_msg_tree.insert("", "end", values=(
             message["timestamp"],
             message["source"],
             message.get("config_name", ""),
             message["parsed_data"].get("event_type", "N/A"),
             message.get("queue", message.get("topic", ""))
-        ))
+        ), tags=(message["uuid"],))
+        
+        # 设置标签样式（可选）
+        self.ui_msg_tree.item(item, tags=(message["uuid"],))
 
     def on_status_received(self, message):
         """更新服务状态"""
