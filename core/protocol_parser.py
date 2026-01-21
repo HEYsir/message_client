@@ -159,12 +159,16 @@ class MuckTruckParser(ProtocolParser):
                     "rect":target["targetRect"],
                     "marks":[
                         {
+                            "name":"IsTarget",
+                            "value":target["mainVehicle"]
+                        },
+                        {
                             "name":"coverPlate",
-                            "value":target["coverPlate"]["valueString"]+":"+"confidence"
+                            "value":target["coverPlate"]["valueString"]+":"+str(target["coverPlate"]["confidence"])
                         },
                         {
                             "name":"vehicleDirty",
-                            "value":target["vehicleDirty"]["valueString"]+":"+"confidence"
+                            "value":target["vehicleDirty"]["valueString"]+":"+str(target["vehicleDirty"]["confidence"])
                         }
                     ]
                 }
