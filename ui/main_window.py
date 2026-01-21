@@ -202,7 +202,7 @@ class MainWindow:
         
     def create_message_detail_and_image(self, parent):
         """创建消息详情和图片显示区域"""
-        # 创建水平分割，分为消息详情和图片预览两部分
+        # 创建水平分割，分为消息详情、图片预览和矩形框列表三部分
         detail_image_paned = PanedWindow(parent, orient=HORIZONTAL)
         parent.add(detail_image_paned)
         
@@ -220,7 +220,7 @@ class MainWindow:
         self.detail_text.pack(fill=BOTH, expand=True)
         self.detail_text.config(state=DISABLED)
         
-        # 图片显示区域（右侧）
+        # 图片显示区域（中间）
         image_frame = ttk.LabelFrame(detail_image_paned, text="图片预览")
         detail_image_paned.add(image_frame, minsize=400)
         
@@ -245,8 +245,133 @@ class MainWindow:
         )
         self.image_info_label.pack(fill=X, padx=10, pady=5)
         
+        # 矩形框和标签侧边栏（右侧）
+        self.create_rect_sidebar(detail_image_paned)
+        
+    def create_rect_sidebar(self, parent):
+        """创建矩形框和标签侧边栏"""
+        sidebar_frame = ttk.LabelFrame(parent, text="检测目标列表")
+        parent.add(sidebar_frame, minsize=250)
+        
+        # 控制按钮区域
+        control_frame = ttk.Frame(sidebar_frame)
+        control_frame.pack(fill=X, padx=5, pady=5)
+        
+        # 显示全部按钮
+        self.show_all_btn = ttk.Button(
+            control_frame, 
+            text="显示全部", 
+            command=self.show_all_rects
+        )
+        self.show_all_btn.pack(side=LEFT, padx=2)
+        
+        # 隐藏全部按钮
+        self.hide_all_btn = ttk.Button(
+            control_frame, 
+            text="隐藏全部", 
+            command=self.hide_all_rects
+        )
+        self.hide_all_btn.pack(side=LEFT, padx=2)
+        
+        # 矩形框列表
+        list_frame = ttk.Frame(sidebar_frame)
+        list_frame.pack(fill=BOTH, expand=True, padx=5, pady=5)
+        
+        # 滚动条
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=RIGHT, fill=Y)
+        
+        # 矩形框列表
+        self.rect_listbox = tk.Listbox(
+            list_frame,
+            selectmode=tk.SINGLE,
+            yscrollcommand=scrollbar.set
+        )
+        self.rect_listbox.pack(fill=BOTH, expand=True)
+        scrollbar.config(command=self.rect_listbox.yview)
+        
+        # 绑定选择事件
+        self.rect_listbox.bind('<<ListboxSelect>>', self.on_rect_select)
+        
+        # 存储当前图片的矩形框信息
+        self.current_rects = []
+        self.selected_rect_index = None
+        self.show_all_rects_flag = False
+        
+    def update_rect_sidebar(self, image_info):
+        """更新矩形框侧边栏"""
+        # 清空当前列表
+        self.rect_listbox.delete(0, tk.END)
+        self.current_rects = []
+        
+        # 检查是否有矩形框信息
+        if 'rectList' in image_info and image_info['rectList']:
+            for i, rect_info in enumerate(image_info['rectList']):
+                if rect_info['type'] == 'rect':
+                    # 提取标记信息
+                    marks = rect_info.get('marks', [])
+                    mark_text = ""
+                    if marks:
+                        mark_names = [mark['name'] for mark in marks if mark['value'] == 'true']
+                        if mark_names:
+                            mark_text = f" - {', '.join(mark_names)}"
+                    
+                    # 添加到列表
+                    rect_text = f"目标 {i+1}{mark_text}"
+                    self.rect_listbox.insert(tk.END, rect_text)
+                    self.current_rects.append(rect_info)
+        
+        # 重置选择状态
+        self.selected_rect_index = None
+        self.show_all_rects_flag = False
+        
+    def on_rect_select(self, event):
+        """矩形框选择事件处理"""
+        selection = self.rect_listbox.curselection()
+        if not selection:
+            return
+            
+        index = selection[0]
+        self.selected_rect_index = index
+        self.show_all_rects_flag = False
+        
+        # 重新显示图片，只显示选中的矩形框
+        if self.current_image_path:
+            self.refresh_image_display()
+            
+    def show_all_rects(self):
+        """显示所有矩形框"""
+        self.selected_rect_index = None
+        self.show_all_rects_flag = True
+        
+        # 重新显示图片，显示所有矩形框
+        if self.current_image_path:
+            self.refresh_image_display()
+            
+    def hide_all_rects(self):
+        """隐藏所有矩形框"""
+        self.selected_rect_index = None
+        self.show_all_rects_flag = False
+        
+        # 重新显示图片，不显示任何矩形框
+        if self.current_image_path:
+            self.refresh_image_display()
+            
+    def refresh_image_display(self):
+        """刷新图片显示"""
+        # 获取当前消息的图片信息
+        if not self.current_message:
+            return
+            
+        parser = ParserRegistry.get_parser(self.current_message["parsed_data"]["event_type"])
+        image_info = parser.extract_image_info(self.current_message["parsed_data"])
+        
+        if image_info and self.current_image_path:
+            image_info['filename'] = self.current_image_path
+            self.display_image(image_info)
+        
     def display_image(self, image_info: dict):
-        """显示图片，并绘制rectList中的矩形框和标记信息"""
+        """显示图片，并根据选择状态绘制矩形框和标记信息"""
         image_path = image_info['filename']
         if not image_path or not os.path.exists(image_path):
             self.clear_image()
@@ -268,7 +393,11 @@ class MainWindow:
                 new_size = (int(original_width * scale), int(original_height * scale))
                 image = image.resize(new_size, Image.Resampling.LANCZOS)
             
-            # 如果有rectList，绘制矩形框和标记
+            # 只在第一次显示图片时更新侧边栏，避免重置选择状态
+            if not self.current_rects:
+                self.update_rect_sidebar(image_info)
+            
+            # 如果有rectList，根据选择状态绘制矩形框和标记
             if 'rectList' in image_info and image_info['rectList']:
                 # 创建可绘制的图像副本
                 drawable_image = image.copy()
@@ -280,30 +409,17 @@ class MainWindow:
                 except:
                     font = ImageFont.load_default()
                 
-                # 绘制每个矩形框
-                for i, rect_info in enumerate(image_info['rectList']):
-                    if rect_info['type'] == 'rect':
-                        rect_data = rect_info['rect']
-                        marks = rect_info.get('marks', [])
-                        
-                        # 将相对坐标转换为绝对坐标
-                        x1 = int(rect_data['x'] * drawable_image.width)
-                        y1 = int(rect_data['y'] * drawable_image.height)
-                        x2 = int((rect_data['x'] + rect_data['width']) * drawable_image.width)
-                        y2 = int((rect_data['y'] + rect_data['height']) * drawable_image.height)
-                        
-                        # 绘制矩形框（红色边框）
-                        draw.rectangle([x1, y1, x2, y2], outline='red', width=2)
-                        
-                        # 绘制标记信息
-                        text_y = y1 - 20 if y1 > 30 else y2 + 5
-                        for j, mark in enumerate(marks):
-                            text = f"{mark['name']}: {mark['value']}"
-                            # 绘制文本背景
-                            bbox = draw.textbbox((x1, text_y + j*15), text, font=font)
-                            draw.rectangle(bbox, fill='red')
-                            # 绘制文本
-                            draw.text((x1, text_y + j*15), text, fill='white', font=font)
+                # 根据选择状态绘制矩形框
+                if self.show_all_rects_flag:
+                    # 显示所有矩形框
+                    for i, rect_info in enumerate(image_info['rectList']):
+                        self.draw_rect_with_marks(draw, rect_info, drawable_image, font, i)
+                elif self.selected_rect_index is not None:
+                    # 只显示选中的矩形框
+                    if self.selected_rect_index < len(image_info['rectList']):
+                        rect_info = image_info['rectList'][self.selected_rect_index]
+                        self.draw_rect_with_marks(draw, rect_info, drawable_image, font, self.selected_rect_index)
+                # 默认不显示任何矩形框
                 
                 # 使用绘制后的图像
                 image = drawable_image
@@ -321,7 +437,13 @@ class MainWindow:
             
             rect_info = ""
             if 'rectList' in image_info and image_info['rectList']:
-                rect_info = f" | 检测到 {len(image_info['rectList'])} 个目标"
+                rect_count = len(image_info['rectList'])
+                display_mode = ""
+                if self.show_all_rects_flag:
+                    display_mode = " (显示全部)"
+                elif self.selected_rect_index is not None:
+                    display_mode = f" (显示目标 {self.selected_rect_index + 1})"
+                rect_info = f" | 检测到 {rect_count} 个目标{display_mode}"
             
             image_info_text = f"尺寸: {original_width}x{original_height} | 大小: {file_size_kb:.1f}KB{rect_info}"
             self.image_info_label.config(text=image_info_text)
@@ -331,6 +453,31 @@ class MainWindow:
         except Exception as e:
             print(f"显示图片失败: {e}")
             self.clear_image()
+            
+    def draw_rect_with_marks(self, draw, rect_info, image, font, index):
+        """绘制单个矩形框及其标记信息"""
+        if rect_info['type'] == 'rect':
+            rect_data = rect_info['rect']
+            marks = rect_info.get('marks', [])
+            
+            # 将相对坐标转换为绝对坐标
+            x1 = int(rect_data['x'] * image.width)
+            y1 = int(rect_data['y'] * image.height)
+            x2 = int((rect_data['x'] + rect_data['width']) * image.width)
+            y2 = int((rect_data['y'] + rect_data['height']) * image.height)
+            
+            # 绘制矩形框（红色边框）
+            draw.rectangle([x1, y1, x2, y2], outline='red', width=2)
+            
+            # 绘制标记信息
+            text_y = y1 - 20 if y1 > 30 else y2 + 5
+            for j, mark in enumerate(marks):
+                text = f"{mark['name']}: {mark['value']}"
+                # 绘制文本背景
+                bbox = draw.textbbox((x1, text_y + j*15), text, font=font)
+                draw.rectangle(bbox, fill='red')
+                # 绘制文本
+                draw.text((x1, text_y + j*15), text, fill='white', font=font)
             
     def clear_image(self):
         """清除图片显示"""
