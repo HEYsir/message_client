@@ -757,7 +757,6 @@ class MainWindow:
                     if os.path.exists(image_path):
                         os.remove(image_path)
                         deleted_count += 1
-                        print(f"删除图片文件: {image_path}")
                 except Exception as e:
                     print(f"删除图片文件失败 {image_path}: {e}")
         
@@ -957,21 +956,15 @@ class MainWindow:
                 # 设置当前图片路径（使用第一个可用的图片）
                 if image_index == 0:
                     self.current_image_path = image_path
-                self.detail_text.insert(END, f"图片 {image_index + 1}: 已下载完成\n")
-            else:
-                # 图片需要下载
-                self.detail_text.insert(END, f"图片 {image_index + 1}: 正在下载...\n")
-                
+
         self.detail_text.insert(END, "-" * 40 + "\n\n")
         
     def check_image_download_with_uuid(self, image_info, message_uuid, image_index):
         """检查图片下载状态（UUID版本）"""
-        print(f"检查图片下载状态: {image_info}, UUID: {message_uuid}, 序号: {image_index}")
         try:
             # 构建完整的图片路径
             image_filename = image_info['filename']
             image_path = os.path.join('./downloads', image_filename)
-            print(f"图片路径: {image_path}")
             
             if os.path.exists(image_path):
                 # 图片已下载完成，添加到缓存
@@ -987,13 +980,8 @@ class MainWindow:
                     # 设置当前图片路径（如果是第一张图片）
                     if image_index == 0:
                         self.current_image_path = image_path
-                    # 更新消息详情显示下载完成
-                    self.detail_text.config(state=NORMAL)
-                    self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
-                    self.detail_text.config(state=DISABLED)
             else:
                 # 图片还未下载完成，继续检查
-                print(f"图片不存在，继续检查: {image_path}")
                 self.root.after(500, lambda: self.check_image_download_with_uuid(image_info, message_uuid, image_index))
         except Exception as e:
             print(f"检查图片下载状态时出错: {e}")
