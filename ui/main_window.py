@@ -808,7 +808,7 @@ class MainWindow:
             self.ui_msg_tree.column(col, width=width)
             
     def on_message_select(self, event):
-        """消息选择事件处理"""
+        """消息选择事件处理 - 智能弹窗管理"""
         selection = self.ui_msg_tree.selection()
         if not selection:
             print("没有选中任何消息")
@@ -819,11 +819,73 @@ class MainWindow:
         timestamp = item["values"][0]
         
         # 查找对应消息
+        selected_message = None
         if source in self.messages:
             for msg in self.messages[source]:
                 if msg["timestamp"] == timestamp:
-                    self.display_message(msg)
+                    selected_message = msg
                     break
+        
+        if not selected_message:
+            return
+            
+        # 获取新消息的图片数量
+        image_count = self.get_message_image_count(selected_message)
+        
+        # 智能弹窗管理逻辑
+        if image_count == 1:
+            # 新消息只有一张图片，显示弹窗
+            self.display_message(selected_message)
+            # 延迟显示弹窗，确保图片已加载
+            self.root.after(100, lambda: self.auto_show_popup_for_single_image(selected_message))
+        else:
+            # 新消息没有图片或多张图片，关闭弹窗
+            if hasattr(self, 'popup') and self.popup and self.popup.winfo_exists():
+                self.close_popup()
+            self.display_message(selected_message)
+            
+    def get_message_image_count(self, message):
+        """获取消息中的图片数量"""
+        message_uuid = message.get("uuid")
+        if not message_uuid:
+            return 0
+            
+        # 获取消息的所有图片信息
+        parser = ParserRegistry.get_parser(message["parsed_data"]["event_type"])
+        image_info_list = parser.extract_image_info_list(message["parsed_data"])
+        
+        if not image_info_list:
+            return 0
+            
+        # 检查实际可用的图片数量（已下载完成的）
+        available_count = 0
+        for image_index, image_info in enumerate(image_info_list):
+            cache_key = (message_uuid, image_index)
+            if cache_key in self.image_cache:
+                available_count += 1
+                
+        return available_count
+        
+    def auto_show_popup_for_single_image(self, message):
+        """为只有一张图片的消息自动显示弹窗"""
+        message_uuid = message.get("uuid")
+        if not message_uuid:
+            return
+            
+        # 获取消息的图片信息
+        parser = ParserRegistry.get_parser(message["parsed_data"]["event_type"])
+        image_info_list = parser.extract_image_info_list(message["parsed_data"])
+        
+        if not image_info_list or len(image_info_list) != 1:
+            return
+            
+        # 检查图片是否已下载完成
+        image_info = image_info_list[0]
+        cache_key = (message_uuid, 0)
+        if cache_key in self.image_cache:
+            image_info['filename'] = self.image_cache[cache_key]
+            # 显示弹窗
+            self.show_popup(image_info)
                     
     def display_message(self, message):
         """显示消息详情（UUID版本）"""
