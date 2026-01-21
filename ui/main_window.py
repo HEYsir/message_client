@@ -62,6 +62,9 @@ class MainWindow:
         self.message_bus.subscribe("message.received", self.on_message_received)
         self.message_bus.subscribe("service.status", self.on_status_received)
 
+        # 注册窗口关闭事件
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         # 启动消息处理
         self.process_messages()
     def init_styles(self):
@@ -78,14 +81,27 @@ class MainWindow:
         send_button.pack(fill=X, padx=5, pady=5)
 
     def on_clear_service_messages(self):
-        """清除当前选项卡服务的消息"""
+        """清除当前选项卡服务的消息，包括缓存和图片文件"""
         selected_tab = self.tab_container.get_selected_tab()
         if not selected_tab:
             print("未选择任何服务")
             return
 
-        confirm = tk.messagebox.askyesno("确认清除", f"是否清除当前服务[{selected_tab}]的消息？")
+        confirm = tk.messagebox.askyesno("确认清除", f"是否清除当前服务[{selected_tab}]的消息以及对应的图片文件？")
         if confirm:
+            # 删除该服务的所有消息对应的图片文件
+            if selected_tab in self.messages:
+                deleted_count = 0
+                for message in self.messages[selected_tab]:
+                    message_uuid = message.get("uuid")
+                    if message_uuid:
+                        # 删除该消息对应的所有图片文件和缓存
+                        deleted_count += self.delete_message_images(message_uuid)
+                
+                if deleted_count > 0:
+                    print(f"已删除 {deleted_count} 个图片文件")
+            
+            # 清空消息列表和UI显示
             self.messages[selected_tab] = []
             self.ui_msg_tree.delete(*self.ui_msg_tree.get_children())
             self.detail_text.config(state=NORMAL)
@@ -637,6 +653,56 @@ class MainWindow:
         """清除图片显示"""
         self.current_image_path = None
         self.clear_thumbnails()
+
+    def delete_message_images(self, message_uuid):
+        """删除指定消息UUID对应的所有图片文件和缓存"""
+        deleted_count = 0
+        
+        # 遍历缓存，找到该消息UUID对应的所有图片
+        cache_keys_to_delete = []
+        for cache_key, image_path in self.image_cache.items():
+            if cache_key[0] == message_uuid:  # cache_key[0] 是 message_uuid
+                cache_keys_to_delete.append(cache_key)
+                # 删除图片文件
+                try:
+                    if os.path.exists(image_path):
+                        os.remove(image_path)
+                        deleted_count += 1
+                        print(f"删除图片文件: {image_path}")
+                except Exception as e:
+                    print(f"删除图片文件失败 {image_path}: {e}")
+        
+        # 从缓存中删除对应的条目
+        for cache_key in cache_keys_to_delete:
+            del self.image_cache[cache_key]
+        
+        return deleted_count
+
+    def cleanup_all_images(self):
+        """清理整个图片文件夹下的所有内容"""
+        total_deleted = 0
+        downloads_dir = './downloads'
+        
+        # 删除整个downloads文件夹下的所有文件
+        if os.path.exists(downloads_dir):
+            for filename in os.listdir(downloads_dir):
+                file_path = os.path.join(downloads_dir, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        total_deleted += 1
+                        print(f"删除图片文件: {file_path}")
+                except Exception as e:
+                    print(f"删除图片文件失败 {file_path}: {e}")
+        
+        # 清空缓存
+        self.image_cache.clear()
+        
+        # 清空缩略图
+        self.clear_thumbnails()
+        
+        print(f"总共删除 {total_deleted} 个图片文件（删除整个downloads文件夹下的所有文件）")
+        return total_deleted
         
     def setup_tree_columns(self):
         """设置树形视图列"""
@@ -890,12 +956,38 @@ class MainWindow:
         self.message_bus.process_messages()
         self.root.after(100, self.process_messages)
         
+    def on_closing(self):
+        """窗口关闭事件处理"""
+        try:
+            confirm = tk.messagebox.askyesno(
+                "确认关闭", 
+                "是否清理所有下载的图片文件？\n\n选择'是'将删除所有图片文件\n选择'否'将保留图片文件"
+            )
+            
+            if confirm:
+                deleted_count = self.cleanup_all_images()
+                print("清理完成", f"已清理 {deleted_count} 个图片文件\n")
+            
+            # 执行清理操作
+            self.cleanup()
+            
+            # 退出应用
+            self.root.quit()
+        except Exception as e:
+            print(f"关闭窗口时出错: {e}")
+            # 确保程序退出
+            self.root.quit()
+
     def cleanup(self):
         """清理资源"""
         # 停止所有服务线程
         for tab in self.config_tab_instances.values():
             if hasattr(tab, "stop_service"):
                 tab.stop_service()
+        
+        # 关闭图片弹窗
+        if hasattr(self, 'popup') and self.popup:
+            self.popup.destroy()
 
 class SendMessageConfigTab(BaseConfigTab):
     def _init_config_vars(self):

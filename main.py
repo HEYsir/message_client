@@ -39,7 +39,7 @@ def main():
     # 创建主窗口
     root = Tk()
     app = MainWindow(root)
-    root.protocol("WM_DELETE_WINDOW", lambda: (app.cleanup(), root.destroy()))
+    # 窗口关闭事件已经在MainWindow类中注册，这里不再重复注册
     root.mainloop()
 
 if __name__ == "__main__":
