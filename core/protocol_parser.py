@@ -15,6 +15,14 @@ class ProtocolParser:
     def extract_image_info(self, parsed_data: dict) -> Optional[dict]:
         """提取图片信息"""
         raise NotImplementedError
+        
+    def extract_image_info_list(self, parsed_data: dict) -> list:
+        """提取所有图片信息列表"""
+        # 默认实现，返回单个图片的列表
+        image_info = self.extract_image_info(parsed_data)
+        if image_info:
+            return [image_info]
+        return []
 
 class ParserRegistry:
     """解析器注册中心"""

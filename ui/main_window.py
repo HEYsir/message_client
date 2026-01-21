@@ -11,6 +11,8 @@ import json
 import html
 import re
 import os
+import uuid
+from datetime import datetime
 
 from core.protocol_parser import ParserRegistry
 from core.image_handler import ImageHandler
@@ -42,6 +44,13 @@ class MainWindow:
         # 存储消息列表
         self.messages = {}  # source -> [messages]
         self.current_message = None
+        
+        # UUID消息索引管理
+        self.message_uuid_map = {}  # uuid -> message
+        self.uuid_counter = {}  # source -> counter (用于图片顺序编号)
+        
+        # 图片下载缓存，按消息UUID和图片序号存储
+        self.image_cache = {}  # (message_uuid, image_index) -> image_path
         
         # 图片相关属性
         self.current_image_path = None
@@ -513,11 +522,14 @@ class MainWindow:
         
         # 重置选择状态 - 但保留当前选择状态
         # 只有在没有选择且没有显示全部时才重置
-        if self.selected_rect_index is not None:
-            # 保持当前选择状态
-            # 尝试恢复选择
+        if self.selected_rect_index is not None and self.rect_listbox.size() > 0:
+            # 保持当前选择状态，但确保索引在有效范围内
             if self.selected_rect_index < self.rect_listbox.size():
                 self.rect_listbox.selection_set(self.selected_rect_index)
+            else:
+                # 如果索引超出范围，重置选择状态
+                self.selected_rect_index = None
+                self.show_all_rects_flag = False
         elif self.show_all_rects_flag:
             # 显示全部模式，保持状态
             pass
@@ -530,8 +542,11 @@ class MainWindow:
         """矩形框选择事件处理"""
         selection = self.rect_listbox.curselection()
         if not selection:
+            # 如果没有选择，则设置为不显示任何矩形框
+            self.selected_rect_index = None
+            self.show_all_rects_flag = False
             return
-            
+        
         index = selection[0]
         self.selected_rect_index = index
         self.show_all_rects_flag = False
@@ -562,20 +577,35 @@ class MainWindow:
         """刷新图片显示（用于弹窗中的矩形框选择）"""
         # 获取当前消息的图片信息
         if not self.current_message:
+            print("当前消息为空")
             return
             
+        message_uuid = self.current_message.get("uuid")
+        if not message_uuid:
+            print("当前消息没有UUID，无法刷新图片显示")
+            return
+            
+        # 从缓存中获取图片信息
         parser = ParserRegistry.get_parser(self.current_message["parsed_data"]["event_type"])
-        image_info = parser.extract_image_info(self.current_message["parsed_data"])
+        image_info_list = parser.extract_image_info_list(self.current_message["parsed_data"])
         
-        if image_info and self.current_image_path:
+        if image_info_list and self.current_image_path:
+            # 使用第一个图片的信息（支持多图片的情况）
+            image_info = image_info_list[0]
             image_info['filename'] = self.current_image_path
+            
             # 确保弹窗是可见的
             popup_state = self.popup.state()
             
             if popup_state == "withdrawn":
+                # 如果弹窗已隐藏，重新显示
                 self.show_popup(image_info)
+            elif popup_state == "normal":
+                # 如果弹窗正常显示，强制重新显示图片
+                self.display_image_in_popup(image_info)
             else:
-                # 强制重新显示图片，包括矩形框信息
+                # 其他状态（如iconic最小化），先显示再刷新
+                self.popup.deiconify()
                 self.display_image_in_popup(image_info)
         
     def draw_rect_in_popup(self, draw, rect_info, image, font, index):
@@ -641,7 +671,7 @@ class MainWindow:
                     break
                     
     def display_message(self, message):
-        """显示消息详情"""
+        """显示消息详情（UUID版本）"""
         self.current_message = message
         self.detail_text.config(state=NORMAL)
         self.detail_text.delete(1.0, END)
@@ -649,35 +679,17 @@ class MainWindow:
         # 清除当前图片显示
         self.clear_image()
   
-        self.detail_text.insert(END, self.current_message.get("source"))
-        self.detail_text.insert(END, f"\n来源IP: {self.current_message.get('ip', 'N/A')}\n")
+        self.detail_text.insert(END, f"消息UUID: {self.current_message.get('uuid', 'N/A')}\n")
+        self.detail_text.insert(END, f"来源: {self.current_message.get('source')}\n")
+        self.detail_text.insert(END, f"来源IP: {self.current_message.get('ip', 'N/A')}\n")
         
         self.detail_text.insert(END, f"接收时间: {self.current_message['timestamp']}\n")
         self.detail_text.insert(END, "-" * 80 + "\n\n")
         
-        # 提取图片信息并下载
-        print(self.current_message["parsed_data"]["event_type"])
-        parser = ParserRegistry.get_parser(self.current_message["parsed_data"]["event_type"])
-        image_info = parser.extract_image_info(self.current_message["parsed_data"])
-        if image_info:
-            # 显示图片下载信息
-            self.detail_text.insert(END, f"检测到图片URL: {image_info['url']}\n")
-            self.detail_text.insert(END, f"图片文件名: {image_info['filename']}\n")
-            self.detail_text.insert(END, "正在下载图片...\n")
-            self.detail_text.insert(END, "-" * 80 + "\n\n")
-            
-            # 异步下载图片
-            self.image_handler.async_download(
-                image_info['url'],
-                image_info['filename']
-            )
-            
-            # 启动图片检查任务
-            self.check_image_download(image_info)
-            
-            # 保存图片路径用于后续刷新显示
-            image_path = os.path.join('./downloads', image_info['filename'])
-            self.current_image_path = image_path
+        # 显示所有图片信息
+        message_uuid = self.current_message.get("uuid")
+        if message_uuid:
+            self.display_message_images(message_uuid)
                 
         parsed_data = self.current_message["parsed_data"]
         
@@ -704,10 +716,40 @@ class MainWindow:
             self.detail_text.insert(END, raw_str)
             
         self.detail_text.config(state=DISABLED)
+
+    def display_message_images(self, message_uuid):
+        """显示消息的所有图片"""
+        # 获取消息的所有图片
+        parser = ParserRegistry.get_parser(self.current_message["parsed_data"]["event_type"])
+        image_info_list = parser.extract_image_info_list(self.current_message["parsed_data"])
         
-    def check_image_download(self, image_info):
-        """检查图片下载状态"""
-        print(f"检查图片下载状态: {image_info}")
+        if not image_info_list:
+            return
+            
+        self.detail_text.insert(END, "图片信息:\n")
+        self.detail_text.insert(END, "-" * 40 + "\n")
+        
+        for image_index, image_info in enumerate(image_info_list):
+            # 检查图片缓存
+            cache_key = (message_uuid, image_index)
+            if cache_key in self.image_cache:
+                # 图片已存在缓存中
+                image_path = self.image_cache[cache_key]
+                image_info['filename'] = image_path
+                self.add_thumbnail(image_info)
+                # 设置当前图片路径（使用第一个可用的图片）
+                if image_index == 0:
+                    self.current_image_path = image_path
+                self.detail_text.insert(END, f"图片 {image_index + 1}: 已下载完成\n")
+            else:
+                # 图片需要下载
+                self.detail_text.insert(END, f"图片 {image_index + 1}: 正在下载...\n")
+                
+        self.detail_text.insert(END, "-" * 40 + "\n\n")
+        
+    def check_image_download_with_uuid(self, image_info, message_uuid, image_index):
+        """检查图片下载状态（UUID版本）"""
+        print(f"检查图片下载状态: {image_info}, UUID: {message_uuid}, 序号: {image_index}")
         try:
             # 构建完整的图片路径
             image_filename = image_info['filename']
@@ -715,19 +757,27 @@ class MainWindow:
             print(f"图片路径: {image_path}")
             
             if os.path.exists(image_path):
-                # 图片已下载完成，添加缩略图
-                print(f"图片已存在，开始添加缩略图: {image_path}")
+                # 图片已下载完成，添加到缓存
+                cache_key = (message_uuid, image_index)
+                self.image_cache[cache_key] = image_path
+                
                 # 更新image_info中的filename为完整路径
                 image_info['filename'] = image_path
-                self.add_thumbnail(image_info)
-                # 更新消息详情显示下载完成
-                self.detail_text.config(state=NORMAL)
-                self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
-                self.detail_text.config(state=DISABLED)
+                
+                # 如果当前显示的消息是这个UUID，则添加缩略图
+                if self.current_message and self.current_message.get("uuid") == message_uuid:
+                    self.add_thumbnail(image_info)
+                    # 设置当前图片路径（如果是第一张图片）
+                    if image_index == 0:
+                        self.current_image_path = image_path
+                    # 更新消息详情显示下载完成
+                    self.detail_text.config(state=NORMAL)
+                    self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
+                    self.detail_text.config(state=DISABLED)
             else:
                 # 图片还未下载完成，继续检查
                 print(f"图片不存在，继续检查: {image_path}")
-                self.root.after(500, lambda: self.check_image_download(image_info))
+                self.root.after(500, lambda: self.check_image_download_with_uuid(image_info, message_uuid, image_index))
         except Exception as e:
             print(f"检查图片下载状态时出错: {e}")
             print(f"image_info类型: {type(image_info)}, 值: {image_info}")
@@ -737,6 +787,12 @@ class MainWindow:
         source = message["source"]
         if source not in self.messages:
             self.messages[source] = []
+            self.uuid_counter[source] = 0
+
+        # 为消息生成UUID
+        message_uuid = str(uuid.uuid4())
+        message["uuid"] = message_uuid
+        self.message_uuid_map[message_uuid] = message
 
         # 获取对应的解析器
         parser = ParserRegistry.get_parser('basealarm')
@@ -744,8 +800,12 @@ class MainWindow:
         parsed_data = parser.parse(message['content_type'], post_data)
         message["parsed_data"] = parsed_data
 
+        # 处理消息中的图片
+        self.process_message_images(message)
+
         self.messages[source].append(message)
         self.add_message_to_tree(message)
+        
         # 如果当前选中消息是新消息，自动显示详情
         if self.current_message and self.current_message["timestamp"] == message["timestamp"] and self.current_message["source"] == source:
             self.display_message(message)
@@ -759,6 +819,48 @@ class MainWindow:
         # 更新服务状态
         if message.get("type") == "status":
             self.on_status_received(message)
+
+    def process_message_images(self, message):
+        """处理消息中的图片，与消息UUID关联"""
+        message_uuid = message["uuid"]
+        source = message["source"]
+        
+        # 获取图片信息
+        parser = ParserRegistry.get_parser(message["parsed_data"]["event_type"])
+        image_info_list = parser.extract_image_info_list(message["parsed_data"])
+        
+        if not image_info_list:
+            return
+            
+        # 为每个图片生成序号
+        for image_index, image_info in enumerate(image_info_list):
+            # 检查图片是否已经存在
+            cache_key = (message_uuid, image_index)
+            if cache_key in self.image_cache:
+                # 图片已存在，直接使用缓存，但保留rectList信息
+                image_info['filename'] = self.image_cache[cache_key]
+                # 图片已存在，不需要下载，但需要确保rectList信息被保留
+                continue
+                
+            # 生成新的图片文件名（包含消息UUID和图片序号）
+            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S+0800")
+            image_filename = f"image_{message_uuid[:8]}_{image_index}_{timestamp}.jpg"
+            image_info['filename'] = image_filename
+            
+            # 检查文件系统是否已存在该图片
+            image_path = os.path.join('./downloads', image_filename)
+            if os.path.exists(image_path):
+                # 文件已存在，添加到缓存，保留rectList信息
+                self.image_cache[cache_key] = image_path
+                image_info['filename'] = image_path
+            else:
+                # 需要下载图片
+                self.image_handler.async_download(
+                    image_info['url'],
+                    image_filename
+                )
+                # 启动图片检查任务
+                self.check_image_download_with_uuid(image_info, message_uuid, image_index)
         
     def add_message_to_tree(self, message):
         """添加消息到列表"""
