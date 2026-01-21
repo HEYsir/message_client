@@ -45,7 +45,6 @@ class MainWindow:
         
         # 图片相关属性
         self.current_image_path = None
-        self.image_label = None
         
         # 初始化UI
         self.create_ui()
@@ -199,16 +198,17 @@ class MainWindow:
         self.detail_text.delete(1.0, END)
         self.detail_text.config(state=DISABLED)
         self.clear_image()
+        self.current_message = None
         
     def create_message_detail_and_image(self, parent):
         """创建消息详情和图片显示区域"""
-        # 创建水平分割，分为消息详情、图片预览和矩形框列表三部分
-        detail_image_paned = PanedWindow(parent, orient=HORIZONTAL)
+        # 创建垂直分割，分为消息详情和图片缩略图区域
+        detail_image_paned = PanedWindow(parent, orient=VERTICAL)
         parent.add(detail_image_paned)
         
-        # 消息详情区域（左侧）
+        # 消息详情区域（顶部）
         detail_frame = ttk.LabelFrame(detail_image_paned, text="消息详情")
-        detail_image_paned.add(detail_frame, minsize=400)
+        detail_image_paned.add(detail_frame, minsize=200)
         
         self.detail_text = scrolledtext.ScrolledText(
             detail_frame,
@@ -220,33 +220,222 @@ class MainWindow:
         self.detail_text.pack(fill=BOTH, expand=True)
         self.detail_text.config(state=DISABLED)
         
-        # 图片显示区域（中间）
-        image_frame = ttk.LabelFrame(detail_image_paned, text="图片预览")
-        detail_image_paned.add(image_frame, minsize=400)
+        # 图片缩略图区域（底部）
+        self.create_thumbnail_area(detail_image_paned)
+        
+        # 创建图片弹窗
+        self.create_image_popup()
+        
+    def create_thumbnail_area(self, parent):
+        """创建图片缩略图区域"""
+        thumbnail_frame = ttk.LabelFrame(parent, text="图片预览")
+        parent.add(thumbnail_frame, minsize=120)
+        
+        # 创建一个可以水平滚动的缩略图容器
+        thumbnail_canvas = tk.Canvas(thumbnail_frame, height=100)
+        scrollbar = ttk.Scrollbar(thumbnail_frame, orient=HORIZONTAL, command=thumbnail_canvas.xview)
+        thumbnail_canvas.configure(xscrollcommand=scrollbar.set)
+        
+        # 缩略图容器
+        self.thumbnail_container = tk.Frame(thumbnail_canvas)
+        thumbnail_canvas.create_window((0, 0), window=self.thumbnail_container, anchor="nw")
+        
+        # 布局
+        thumbnail_canvas.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        scrollbar.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
+        
+        # 绑定容器大小变化事件
+        self.thumbnail_container.bind("<Configure>", lambda e: thumbnail_canvas.configure(scrollregion=thumbnail_canvas.bbox("all")))
+        
+        # 存储缩略图标签
+        self.thumbnail_labels = []
+        
+    def create_image_popup(self):
+        """创建图片弹窗"""
+        # 创建顶层窗口
+        self.popup = tk.Toplevel(self.root)
+        self.popup.title("图片详情")
+        self.popup.geometry("1000x600")
+        self.popup.withdraw()  # 初始隐藏
+        
+        # 创建水平分割布局
+        popup_paned = PanedWindow(self.popup, orient=HORIZONTAL)
+        popup_paned.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        
+        # 图片显示区域（左侧）
+        popup_image_frame = ttk.LabelFrame(popup_paned, text="图片预览")
+        popup_paned.add(popup_image_frame, minsize=600)
         
         # 图片显示标签
-        self.image_label = tk.Label(
-            image_frame,
+        self.popup_image_label = tk.Label(
+            popup_image_frame,
             text="暂无图片",
             font=("Arial", 12),
             bg="white",
-            relief="sunken",
-            width=40,
-            height=20
+            relief="sunken"
         )
-        self.image_label.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        self.popup_image_label.pack(fill=BOTH, expand=True, padx=10, pady=10)
         
         # 图片信息标签
-        self.image_info_label = tk.Label(
-            image_frame,
+        self.popup_image_info_label = tk.Label(
+            popup_image_frame,
             text="",
             font=("Arial", 10),
             fg="gray"
         )
-        self.image_info_label.pack(fill=X, padx=10, pady=5)
+        self.popup_image_info_label.pack(fill=X, padx=10, pady=5)
         
         # 矩形框和标签侧边栏（右侧）
-        self.create_rect_sidebar(detail_image_paned)
+        self.create_rect_sidebar(popup_paned)
+        
+        # 关闭按钮
+        close_button = ttk.Button(self.popup, text="关闭", command=self.close_popup)
+        close_button.pack(side=tk.BOTTOM, pady=10)
+        
+        # 弹窗关闭事件
+        self.popup.protocol("WM_DELETE_WINDOW", self.close_popup)
+        
+    def close_popup(self):
+        """关闭弹窗"""
+        self.popup.withdraw()
+        # 重置选择状态，以便下次打开时显示默认状态
+        self.selected_rect_index = None
+        self.show_all_rects_flag = False
+        
+    def show_popup(self, image_info):
+        """显示图片弹窗"""
+        self.popup.deiconify()
+        self.popup.lift()
+        self.popup.focus_force()
+        
+        # 显示图片和矩形框
+        self.display_image_in_popup(image_info)
+        
+    def display_image_in_popup(self, image_info):
+        """在弹窗中显示图片"""
+        image_path = image_info['filename']
+        if not image_path or not os.path.exists(image_path):
+            self.popup_image_label.config(image="", text="暂无图片")
+            self.popup_image_info_label.config(text="")
+            return
+            
+        try:
+            # 加载图片
+            image = Image.open(image_path)
+            original_width, original_height = image.size
+            
+            # 调整图片大小以适应弹窗
+            max_width = 500
+            max_height = 400
+            
+            # 计算缩放比例
+            scale = min(max_width/original_width, max_height/original_height, 1.0)
+            
+            if scale < 1.0:
+                new_size = (int(original_width * scale), int(original_height * scale))
+                image = image.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # 更新矩形框侧边栏
+            self.update_rect_sidebar(image_info)
+            
+            # 如果有rectList，根据选择状态绘制矩形框
+            if 'rectList' in image_info and image_info['rectList']:
+                # 创建可绘制的图像副本
+                drawable_image = image.copy()
+                draw = ImageDraw.Draw(drawable_image)
+                
+                # 尝试加载字体，如果失败则使用默认字体
+                try:
+                    font = ImageFont.truetype("arial.ttf", 12)
+                except:
+                    font = ImageFont.load_default()
+                
+                # 根据选择状态绘制矩形框
+                if self.show_all_rects_flag:
+                    # 显示所有矩形框
+                    for i, rect_info in enumerate(image_info['rectList']):
+                        self.draw_rect_in_popup(draw, rect_info, drawable_image, font, i)
+                elif self.selected_rect_index is not None:
+                    # 只显示选中的矩形框
+                    if self.selected_rect_index < len(image_info['rectList']):
+                        rect_info = image_info['rectList'][self.selected_rect_index]
+                        self.draw_rect_in_popup(draw, rect_info, drawable_image, font, self.selected_rect_index)
+                else:
+                    # 默认不显示矩形框
+                    pass
+                
+                # 使用绘制后的图像
+                image = drawable_image
+            
+            # 转换为Tkinter可显示的格式
+            photo = ImageTk.PhotoImage(image)
+            
+            # 更新图片标签
+            self.popup_image_label.config(image=photo, text="")
+            self.popup_image_label.image = photo  # 保持引用
+            
+            # 更新图片信息
+            file_size = os.path.getsize(image_path)
+            file_size_kb = file_size / 1024
+            
+            rect_info = ""
+            if 'rectList' in image_info and image_info['rectList']:
+                rect_count = len(image_info['rectList'])
+                rect_info = f" | 检测到 {rect_count} 个目标"
+            
+            image_info_text = f"尺寸: {original_width}x{original_height} | 大小: {file_size_kb:.1f}KB{rect_info}"
+            self.popup_image_info_label.config(text=image_info_text)
+            
+        except Exception as e:
+            print(f"显示弹窗图片失败: {e}")
+            import traceback
+            traceback.print_exc()
+            self.popup_image_label.config(image="", text="显示失败")
+            self.popup_image_info_label.config(text="")
+            
+    def add_thumbnail(self, image_info):
+        """添加图片缩略图"""
+        image_path = image_info['filename']
+        if not image_path or not os.path.exists(image_path):
+            return
+            
+        try:
+            # 加载图片并创建缩略图
+            image = Image.open(image_path)
+            
+            # 创建缩略图（80x60）
+            thumbnail_size = (80, 60)
+            thumbnail = image.copy()
+            thumbnail.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
+            
+            # 转换为Tkinter可显示的格式
+            photo = ImageTk.PhotoImage(thumbnail)
+            
+            # 创建缩略图标签
+            thumbnail_label = tk.Label(
+                self.thumbnail_container,
+                image=photo,
+                relief="raised",
+                bd=1,
+                cursor="hand2"  # 鼠标悬停时显示手型
+            )
+            thumbnail_label.image = photo  # 保持引用
+            thumbnail_label.pack(side=tk.LEFT, padx=5, pady=5)
+            
+            # 绑定点击事件
+            thumbnail_label.bind("<Button-1>", lambda e, info=image_info: self.show_popup(info))
+            
+            # 存储引用
+            self.thumbnail_labels.append(thumbnail_label)
+            
+        except Exception as e:
+            print(f"创建缩略图失败: {e}")
+            
+    def clear_thumbnails(self):
+        """清除所有缩略图"""
+        for label in self.thumbnail_labels:
+            label.destroy()
+        self.thumbnail_labels = []
         
     def create_rect_sidebar(self, parent):
         """创建矩形框和标签侧边栏"""
@@ -312,18 +501,30 @@ class MainWindow:
                     marks = rect_info.get('marks', [])
                     mark_text = ""
                     if marks:
-                        mark_names = [mark['name'] for mark in marks if mark['value'] == 'true']
-                        if mark_names:
-                            mark_text = f" - {', '.join(mark_names)}"
+                        # 显示所有标记，而不只是值为 'true' 的标记
+                        mark_display = [f"{mark['name']}:{mark['value']}" for mark in marks]
+                        if mark_display:
+                            mark_text = f" - {', '.join(mark_display)}"
                     
                     # 添加到列表
                     rect_text = f"目标 {i+1}{mark_text}"
                     self.rect_listbox.insert(tk.END, rect_text)
                     self.current_rects.append(rect_info)
         
-        # 重置选择状态
-        self.selected_rect_index = None
-        self.show_all_rects_flag = False
+        # 重置选择状态 - 但保留当前选择状态
+        # 只有在没有选择且没有显示全部时才重置
+        if self.selected_rect_index is not None:
+            # 保持当前选择状态
+            # 尝试恢复选择
+            if self.selected_rect_index < self.rect_listbox.size():
+                self.rect_listbox.selection_set(self.selected_rect_index)
+        elif self.show_all_rects_flag:
+            # 显示全部模式，保持状态
+            pass
+        else:
+            # 重置选择状态
+            self.selected_rect_index = None
+            self.show_all_rects_flag = False
         
     def on_rect_select(self, event):
         """矩形框选择事件处理"""
@@ -358,7 +559,7 @@ class MainWindow:
             self.refresh_image_display()
             
     def refresh_image_display(self):
-        """刷新图片显示"""
+        """刷新图片显示（用于弹窗中的矩形框选择）"""
         # 获取当前消息的图片信息
         if not self.current_message:
             return
@@ -368,94 +569,17 @@ class MainWindow:
         
         if image_info and self.current_image_path:
             image_info['filename'] = self.current_image_path
-            self.display_image(image_info)
+            # 确保弹窗是可见的
+            popup_state = self.popup.state()
+            
+            if popup_state == "withdrawn":
+                self.show_popup(image_info)
+            else:
+                # 强制重新显示图片，包括矩形框信息
+                self.display_image_in_popup(image_info)
         
-    def display_image(self, image_info: dict):
-        """显示图片，并根据选择状态绘制矩形框和标记信息"""
-        image_path = image_info['filename']
-        if not image_path or not os.path.exists(image_path):
-            self.clear_image()
-            return
-            
-        try:
-            # 加载图片
-            image = Image.open(image_path)
-            original_width, original_height = image.size
-            
-            # 调整图片大小以适应显示区域
-            max_width = 400
-            max_height = 300
-            
-            # 计算缩放比例
-            scale = min(max_width/original_width, max_height/original_height, 1.0)
-            
-            if scale < 1.0:
-                new_size = (int(original_width * scale), int(original_height * scale))
-                image = image.resize(new_size, Image.Resampling.LANCZOS)
-            
-            # 只在第一次显示图片时更新侧边栏，避免重置选择状态
-            if not self.current_rects:
-                self.update_rect_sidebar(image_info)
-            
-            # 如果有rectList，根据选择状态绘制矩形框和标记
-            if 'rectList' in image_info and image_info['rectList']:
-                # 创建可绘制的图像副本
-                drawable_image = image.copy()
-                draw = ImageDraw.Draw(drawable_image)
-                
-                # 尝试加载字体，如果失败则使用默认字体
-                try:
-                    font = ImageFont.truetype("arial.ttf", 12)
-                except:
-                    font = ImageFont.load_default()
-                
-                # 根据选择状态绘制矩形框
-                if self.show_all_rects_flag:
-                    # 显示所有矩形框
-                    for i, rect_info in enumerate(image_info['rectList']):
-                        self.draw_rect_with_marks(draw, rect_info, drawable_image, font, i)
-                elif self.selected_rect_index is not None:
-                    # 只显示选中的矩形框
-                    if self.selected_rect_index < len(image_info['rectList']):
-                        rect_info = image_info['rectList'][self.selected_rect_index]
-                        self.draw_rect_with_marks(draw, rect_info, drawable_image, font, self.selected_rect_index)
-                # 默认不显示任何矩形框
-                
-                # 使用绘制后的图像
-                image = drawable_image
-            
-            # 转换为Tkinter可显示的格式
-            photo = ImageTk.PhotoImage(image)
-            
-            # 更新图片标签
-            self.image_label.config(image=photo, text="")
-            self.image_label.image = photo  # 保持引用
-            
-            # 更新图片信息
-            file_size = os.path.getsize(image_path)
-            file_size_kb = file_size / 1024
-            
-            rect_info = ""
-            if 'rectList' in image_info and image_info['rectList']:
-                rect_count = len(image_info['rectList'])
-                display_mode = ""
-                if self.show_all_rects_flag:
-                    display_mode = " (显示全部)"
-                elif self.selected_rect_index is not None:
-                    display_mode = f" (显示目标 {self.selected_rect_index + 1})"
-                rect_info = f" | 检测到 {rect_count} 个目标{display_mode}"
-            
-            image_info_text = f"尺寸: {original_width}x{original_height} | 大小: {file_size_kb:.1f}KB{rect_info}"
-            self.image_info_label.config(text=image_info_text)
-            
-            self.current_image_path = image_path
-            
-        except Exception as e:
-            print(f"显示图片失败: {e}")
-            self.clear_image()
-            
-    def draw_rect_with_marks(self, draw, rect_info, image, font, index):
-        """绘制单个矩形框及其标记信息"""
+    def draw_rect_in_popup(self, draw, rect_info, image, font, index):
+        """在弹窗中绘制单个矩形框及其标记信息"""
         if rect_info['type'] == 'rect':
             rect_data = rect_info['rect']
             marks = rect_info.get('marks', [])
@@ -481,9 +605,8 @@ class MainWindow:
             
     def clear_image(self):
         """清除图片显示"""
-        self.image_label.config(image="", text="暂无图片")
-        self.image_info_label.config(text="")
         self.current_image_path = None
+        self.clear_thumbnails()
         
     def setup_tree_columns(self):
         """设置树形视图列"""
@@ -551,6 +674,10 @@ class MainWindow:
             
             # 启动图片检查任务
             self.check_image_download(image_info)
+            
+            # 保存图片路径用于后续刷新显示
+            image_path = os.path.join('./downloads', image_info['filename'])
+            self.current_image_path = image_path
                 
         parsed_data = self.current_message["parsed_data"]
         
@@ -588,11 +715,11 @@ class MainWindow:
             print(f"图片路径: {image_path}")
             
             if os.path.exists(image_path):
-                # 图片已下载完成，显示图片
-                print(f"图片已存在，开始显示: {image_path}")
+                # 图片已下载完成，添加缩略图
+                print(f"图片已存在，开始添加缩略图: {image_path}")
                 # 更新image_info中的filename为完整路径
                 image_info['filename'] = image_path
-                self.display_image(image_info)
+                self.add_thumbnail(image_info)
                 # 更新消息详情显示下载完成
                 self.detail_text.config(state=NORMAL)
                 self.detail_text.insert(END, f"\n图片下载完成: {image_path}\n")
