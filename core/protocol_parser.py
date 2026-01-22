@@ -147,15 +147,18 @@ def discover_protocol():
     """自动发现并导入所有协议，兼容cx_Freeze打包路径"""
     # 1. 优先用 sys._MEIPASS（PyInstaller），2. 用 sys.executable 目录（cx_Freeze），3. 用 __file__ 目录（源码）
     if hasattr(sys, "_MEIPASS"):
-        base_dir = sys._MEIPASS
+        protocol_path = Path(sys._MEIPASS) / "protocol"
     else:
-        base_dir = (
-            os.path.dirname(sys.executable)
-            if getattr(sys, "frozen", False)
-            else os.path.dirname(os.path.abspath(__file__))
-        )
+        print(f"froze:{getattr(sys, "frozen", False)}")
+        if getattr(sys, "frozen", False):
+            print(sys.executable)
+            base_dir = Path(sys.executable).parent
+            protocol_path = base_dir / "lib/protocol"
+        else:
+            print(Path(__file__))
+            base_dir = Path(__file__).resolve().parent.parent
+            protocol_path = Path(base_dir) / "protocol"
 
-    protocol_path = Path(base_dir).parent / "protocol"
     print(f"[discover_protocol] search protocol dir: {protocol_path}")
     if not os.path.exists(protocol_path):
         print(f"Warning: protocol directory not found at {protocol_path}")
