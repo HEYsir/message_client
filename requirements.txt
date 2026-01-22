@@ -5,3 +5,4 @@ confluent_kafka
 pika
 pytz
 cx_freeze
+Pillow
