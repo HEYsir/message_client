@@ -127,7 +127,10 @@ class BaseAlarmParser(ProtocolParser):
             if url is None:
                 # 尝试不使用命名空间
                 url = root.find(".//visibleLightURL")
-
+            if url is None:
+                url = root.find(".//ns:bkgUrl", ns)
+                if url is None:
+                    url = root.find(".//bkgUrl")
             if url is not None and url.text:
                 # 生成唯一的文件名
                 import uuid
