@@ -1,5 +1,6 @@
 import socket
 
+
 def get_local_ip_list():
     """获取本机所有网口的IPv4地址列表"""
     ip_list = set()
@@ -22,5 +23,5 @@ def get_local_ip_list():
     except Exception:
         pass
     # 加入通配地址
-    ip_list.add("0.0.0.0")
+    ip_list.add("127.0.0.1")
     return sorted(ip_list)
