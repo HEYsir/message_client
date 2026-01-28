@@ -286,9 +286,10 @@ class ImagePopup:
                 drawable_image = image.copy()
                 draw = ImageDraw.Draw(drawable_image)
 
-                # 尝试加载字体，如果失败则使用默认字体
+                # 尝试加载支持UTF-8的字体
                 try:
-                    font = ImageFont.truetype("arial.ttf", 12)
+                    # 优先尝试使用支持中文的字体
+                    font = ImageFont.truetype("simsun.ttc", 12)  # 宋体
                 except:
                     font = ImageFont.load_default()
 
