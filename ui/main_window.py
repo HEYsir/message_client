@@ -93,15 +93,11 @@ class MainWindow:
     def create_sidebar(self, sidebar_frame):
         """创建侧边栏"""
         # 消费监听按钮
-        consume_button = ttk.Button(
-            sidebar_frame, text="消费监听", command=self.on_consume_listen
-        )
+        consume_button = ttk.Button(sidebar_frame, text="消费监听", command=self.on_consume_listen)
         consume_button.pack(fill=X, padx=5, pady=5)
 
         # 报文发送按钮
-        send_button = ttk.Button(
-            sidebar_frame, text="报文发送", command=self.on_message_send
-        )
+        send_button = ttk.Button(sidebar_frame, text="报文发送", command=self.on_message_send)
         send_button.pack(fill=X, padx=5, pady=5)
 
     def on_clear_service_messages(self):
@@ -111,9 +107,7 @@ class MainWindow:
             print("未选择任何服务")
             return
 
-        confirm = tk.messagebox.askyesno(
-            "确认清除", f"是否清除当前服务[{selected_tab}]的消息以及对应的图片文件？"
-        )
+        confirm = tk.messagebox.askyesno("确认清除", f"是否清除当前服务[{selected_tab}]的消息以及对应的图片文件？")
         if confirm:
             # 删除该服务的所有消息对应的图片文件
             if selected_tab in self.messages:
@@ -211,23 +205,17 @@ class MainWindow:
 
         # 消息列表树形视图
         columns = ("time", "source", "config", "type", "topic")
-        self.ui_msg_tree = ttk.Treeview(
-            list_frame, columns=columns, show="headings", selectmode="browse"
-        )
+        self.ui_msg_tree = ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse")
 
         # 设置列
         self.setup_tree_columns()
 
         # 清除服务消息按钮放在消息列表下方
-        clear_button = ttk.Button(
-            list_frame, text="清除服务消息", command=self.on_clear_service_messages
-        )
+        clear_button = ttk.Button(list_frame, text="清除服务消息", command=self.on_clear_service_messages)
         clear_button.pack(fill=X, padx=5, pady=5, side="bottom")
 
         # 滚动条
-        scrollbar = ttk.Scrollbar(
-            list_frame, orient=VERTICAL, command=self.ui_msg_tree.yview
-        )
+        scrollbar = ttk.Scrollbar(list_frame, orient=VERTICAL, command=self.ui_msg_tree.yview)
         self.ui_msg_tree.configure(yscroll=scrollbar.set)
 
         self.ui_msg_tree.pack(side=LEFT, fill=BOTH, expand=True)
@@ -263,9 +251,7 @@ class MainWindow:
         detail_frame = ttk.LabelFrame(detail_image_paned, text="消息详情")
         detail_image_paned.add(detail_frame, minsize=200)
 
-        self.detail_text = scrolledtext.ScrolledText(
-            detail_frame, wrap=WORD, font=("Consolas", 10), padx=10, pady=10
-        )
+        self.detail_text = scrolledtext.ScrolledText(detail_frame, wrap=WORD, font=("Consolas", 10), padx=10, pady=10)
         self.detail_text.pack(fill=BOTH, expand=True)
         self.detail_text.config(state=DISABLED)
 
@@ -281,16 +267,12 @@ class MainWindow:
 
         # 创建一个可以水平滚动的缩略图容器
         thumbnail_canvas = tk.Canvas(thumbnail_frame, height=100)
-        scrollbar = ttk.Scrollbar(
-            thumbnail_frame, orient=HORIZONTAL, command=thumbnail_canvas.xview
-        )
+        scrollbar = ttk.Scrollbar(thumbnail_frame, orient=HORIZONTAL, command=thumbnail_canvas.xview)
         thumbnail_canvas.configure(xscrollcommand=scrollbar.set)
 
         # 缩略图容器
         self.thumbnail_container = tk.Frame(thumbnail_canvas)
-        thumbnail_canvas.create_window(
-            (0, 0), window=self.thumbnail_container, anchor="nw"
-        )
+        thumbnail_canvas.create_window((0, 0), window=self.thumbnail_container, anchor="nw")
 
         # 布局
         thumbnail_canvas.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -299,9 +281,7 @@ class MainWindow:
         # 绑定容器大小变化事件
         self.thumbnail_container.bind(
             "<Configure>",
-            lambda e: thumbnail_canvas.configure(
-                scrollregion=thumbnail_canvas.bbox("all")
-            ),
+            lambda e: thumbnail_canvas.configure(scrollregion=thumbnail_canvas.bbox("all")),
         )
 
         # 存储缩略图标签
@@ -345,9 +325,7 @@ class MainWindow:
             thumbnail_label.pack(side=tk.LEFT, padx=5, pady=5)
 
             # 绑定点击事件
-            thumbnail_label.bind(
-                "<Button-1>", lambda e, info=image_info: self.show_popup(info)
-            )
+            thumbnail_label.bind("<Button-1>", lambda e, info=image_info: self.show_popup(info))
 
             # 存储引用
             self.thumbnail_labels.append(thumbnail_label)
@@ -412,9 +390,7 @@ class MainWindow:
         # 清空缩略图
         self.clear_thumbnails()
 
-        print(
-            f"总共删除 {total_deleted} 个图片文件（删除整个downloads文件夹下的所有文件）"
-        )
+        print(f"总共删除 {total_deleted} 个图片文件（删除整个downloads文件夹下的所有文件）")
         return total_deleted
 
     def setup_tree_columns(self):
@@ -460,9 +436,7 @@ class MainWindow:
             # 新消息只有一张图片，显示弹窗
             self.display_message(selected_message)
             # 延迟显示弹窗，确保图片已加载
-            self.root.after(
-                100, lambda: self.auto_show_popup_for_single_image(selected_message)
-            )
+            self.root.after(100, lambda: self.auto_show_popup_for_single_image(selected_message))
         else:
             # 新消息没有图片或多张图片，关闭弹窗
             if hasattr(self, "popup") and self.popup and self.popup.winfo_exists():
@@ -521,13 +495,9 @@ class MainWindow:
         # 清除当前图片显示
         self.clear_image()
 
-        self.detail_text.insert(
-            END, f"消息UUID: {self.current_message.get('uuid', 'N/A')}\n"
-        )
+        self.detail_text.insert(END, f"消息UUID: {self.current_message.get('uuid', 'N/A')}\n")
         self.detail_text.insert(END, f"来源: {self.current_message.get('source')}\n")
-        self.detail_text.insert(
-            END, f"来源IP: {self.current_message.get('ip', 'N/A')}\n"
-        )
+        self.detail_text.insert(END, f"来源IP: {self.current_message.get('ip', 'N/A')}\n")
 
         self.detail_text.insert(END, f"接收时间: {self.current_message['timestamp']}\n")
         self.detail_text.insert(END, "-" * 80 + "\n\n")
@@ -546,27 +516,19 @@ class MainWindow:
                 xml_str = re.sub(r"\n\s*\n", "\n", xml_str)
                 self.detail_text.insert(END, xml_str)
             except:
-                raw_str = html.unescape(
-                    self.current_message["raw_data"].decode("utf-8", errors="replace")
-                )
+                raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
                 self.detail_text.insert(END, raw_str)
         elif parsed_data.get("type") == "JSON":
             try:
-                raw_str = html.unescape(
-                    self.current_message["raw_data"].decode("utf-8", errors="replace")
-                )
+                raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
                 json_data = json.loads(raw_str)
                 formatted = json.dumps(json_data, indent=2, ensure_ascii=False)
                 self.detail_text.insert(END, formatted)
             except:
-                raw_str = html.unescape(
-                    self.current_message["raw_data"].decode("utf-8", errors="replace")
-                )
+                raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
                 self.detail_text.insert(END, raw_str)
         else:
-            raw_str = html.unescape(
-                self.current_message["raw_data"].decode("utf-8", errors="replace")
-            )
+            raw_str = html.unescape(self.current_message["raw_data"].decode("utf-8", errors="replace"))
             self.detail_text.insert(END, raw_str)
 
         self.detail_text.config(state=DISABLED)
@@ -574,12 +536,8 @@ class MainWindow:
     def display_message_images(self, message_uuid):
         """显示消息的所有图片"""
         # 获取消息的所有图片
-        parser = ParserRegistry.get_parser(
-            self.current_message["parsed_data"]["event_type"]
-        )
-        image_info_list = parser.extract_image_info_list(
-            self.current_message["parsed_data"]
-        )
+        parser = ParserRegistry.get_parser(self.current_message["parsed_data"]["event_type"])
+        image_info_list = parser.extract_image_info_list(self.current_message["parsed_data"])
 
         if not image_info_list:
             return
@@ -617,10 +575,7 @@ class MainWindow:
                 image_info["filename"] = image_path
 
                 # 如果当前显示的消息是这个UUID，则添加缩略图
-                if (
-                    self.current_message
-                    and self.current_message.get("uuid") == message_uuid
-                ):
+                if self.current_message and self.current_message.get("uuid") == message_uuid:
                     self.add_thumbnail(image_info)
                     # 设置当前图片路径（如果是第一张图片）
                     if image_index == 0:
@@ -629,9 +584,7 @@ class MainWindow:
                 # 图片还未下载完成，继续检查
                 self.root.after(
                     500,
-                    lambda: self.check_image_download_with_uuid(
-                        image_info, message_uuid, image_index
-                    ),
+                    lambda: self.check_image_download_with_uuid(image_info, message_uuid, image_index),
                 )
         except Exception as e:
             print(f"检查图片下载状态时出错: {e}")
@@ -696,9 +649,9 @@ class MainWindow:
             # 检查图片是否已经存在
             cache_key = (message_uuid, image_index)
             if cache_key in self.image_cache:
-                # 图片已存在，直接使用缓存，但保留rectList信息
+                # 图片已存在，直接使用缓存，但保留 targetList 信息
                 image_info["filename"] = self.image_cache[cache_key]
-                # 图片已存在，不需要下载，但需要确保rectList信息被保留
+                # 图片已存在，不需要下载，但需要确保 targetList 信息被保留
                 continue
 
             # 生成新的图片文件名（包含消息UUID和图片序号）
@@ -709,16 +662,14 @@ class MainWindow:
             # 检查文件系统是否已存在该图片
             image_path = os.path.join("./downloads", image_filename)
             if os.path.exists(image_path):
-                # 文件已存在，添加到缓存，保留rectList信息
+                # 文件已存在，添加到缓存，保留 targetList 信息
                 self.image_cache[cache_key] = image_path
                 image_info["filename"] = image_path
             else:
                 # 需要下载图片
                 self.image_handler.async_download(image_info["url"], image_filename)
                 # 启动图片检查任务
-                self.check_image_download_with_uuid(
-                    image_info, message_uuid, image_index
-                )
+                self.check_image_download_with_uuid(image_info, message_uuid, image_index)
 
     def add_message_to_tree(self, message):
         """添加消息到列表"""
@@ -810,24 +761,16 @@ class SendMessageConfigTab(BaseConfigTab):
         # 顶部配置区
         top_frame = ttk.Frame(frame)
         top_frame.pack(fill="x", padx=5, pady=5)
-        ttk.Label(top_frame, text="监听地址:").grid(
-            row=0, column=0, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(top_frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         self.host_var = tk.StringVar(value=self.config_vars["host"])
         ip_list = [self.config_vars["host"]]
-        self.host_combo = ttk.Combobox(
-            top_frame, textvariable=self.host_var, values=ip_list, state="readonly"
-        )
+        self.host_combo = ttk.Combobox(top_frame, textvariable=self.host_var, values=ip_list, state="readonly")
         self.host_combo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Label(top_frame, text="端口:").grid(
-            row=0, column=2, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(top_frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
         self.port_entry = ttk.Entry(top_frame, width=8)
         self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
         self.port_entry.insert(0, self.config_vars["port"])
-        ttk.Label(top_frame, text="路径:").grid(
-            row=0, column=4, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(top_frame, text="路径:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
         self.path_entry = ttk.Entry(top_frame, width=16)
         self.path_entry.grid(row=0, column=5, padx=5, pady=5, sticky="w")
         self.path_entry.insert(0, self.config_vars["url_path"])
@@ -839,9 +782,7 @@ class SendMessageConfigTab(BaseConfigTab):
         self.body_text = tk.Text(left_frame, width=40, height=12)
         self.body_text.pack(fill="both", expand=True, padx=5, pady=5)
         self.body_text.insert(1.0, self.config_vars["body"])
-        self.send_btn = ttk.Button(
-            left_frame, text="发送消息", command=self.send_message
-        )
+        self.send_btn = ttk.Button(left_frame, text="发送消息", command=self.send_message)
         self.send_btn.pack(anchor="se", padx=5, pady=5)
         main_paned.add(left_frame)
         # 右侧：响应结果
@@ -887,9 +828,7 @@ class SendKafkaMessageConfigTab(BaseConfigTab):
     def create_tab_content(self):
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="服务地址:").grid(
-            row=0, column=0, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(frame, text="服务地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         self.servers_entry = ttk.Entry(frame, width=40)
         self.servers_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self.servers_entry.insert(0, self.config_vars["bootstrap_servers"])
@@ -897,16 +836,12 @@ class SendKafkaMessageConfigTab(BaseConfigTab):
         self.topic_entry = ttk.Entry(frame, width=24)
         self.topic_entry.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
         self.topic_entry.insert(0, self.config_vars["topic"])
-        ttk.Label(frame, text="Key(Optional):").grid(
-            row=0, column=4, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(frame, text="Key(Optional):").grid(row=0, column=4, padx=5, pady=5, sticky="e")
         self.key_entry = ttk.Entry(frame, width=16)
         self.key_entry.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
         self.key_entry.insert(0, self.config_vars["key"])
         # 消息体
-        ttk.Label(frame, text="消息体(JSON):").grid(
-            row=1, column=0, sticky="ne", padx=5, pady=5
-        )
+        ttk.Label(frame, text="消息体(JSON):").grid(row=1, column=0, sticky="ne", padx=5, pady=5)
         self.body_text = tk.Text(frame, width=60, height=8)
         self.body_text.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
         self.body_text.insert(1.0, self.config_vars["body"])
@@ -914,13 +849,9 @@ class SendKafkaMessageConfigTab(BaseConfigTab):
         self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
         self.send_btn.grid(row=2, column=5, sticky="e", pady=10)
         # 响应结果
-        ttk.Label(frame, text="响应结果:").grid(
-            row=3, column=0, sticky="ne", padx=5, pady=5
-        )
+        ttk.Label(frame, text="响应结果:").grid(row=3, column=0, sticky="ne", padx=5, pady=5)
         self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(
-            row=3, column=1, columnspan=5, padx=5, pady=5, sticky="ew"
-        )
+        self.result_text.grid(row=3, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
 
     def update_status(self, status):
         pass
@@ -966,9 +897,7 @@ class SendRMQMessageConfigTab(BaseConfigTab):
     def create_tab_content(self):
         frame = ttk.Frame(self.frame)
         frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="主机地址:").grid(
-            row=0, column=0, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(frame, text="主机地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         self.host_entry = ttk.Entry(frame, width=24)
         self.host_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         self.host_entry.insert(0, self.config_vars["host"])
@@ -976,15 +905,11 @@ class SendRMQMessageConfigTab(BaseConfigTab):
         self.port_entry = ttk.Entry(frame, width=8)
         self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
         self.port_entry.insert(0, str(self.config_vars["port"]))
-        ttk.Label(frame, text="队列名称:").grid(
-            row=0, column=4, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(frame, text="队列名称:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
         self.queue_entry = ttk.Entry(frame, width=16)
         self.queue_entry.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
         self.queue_entry.insert(0, self.config_vars["queue"])
-        ttk.Label(frame, text="用户名:").grid(
-            row=1, column=0, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(frame, text="用户名:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
         self.user_entry = ttk.Entry(frame, width=16)
         self.user_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
         self.user_entry.insert(0, self.config_vars["username"])
@@ -993,9 +918,7 @@ class SendRMQMessageConfigTab(BaseConfigTab):
         self.pass_entry.grid(row=1, column=3, padx=5, pady=5, sticky="ew")
         self.pass_entry.insert(0, self.config_vars["password"])
         # 消息体
-        ttk.Label(frame, text="消息体(JSON):").grid(
-            row=2, column=0, sticky="ne", padx=5, pady=5
-        )
+        ttk.Label(frame, text="消息体(JSON):").grid(row=2, column=0, sticky="ne", padx=5, pady=5)
         self.body_text = tk.Text(frame, width=60, height=8)
         self.body_text.grid(row=2, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
         self.body_text.insert(1.0, self.config_vars["body"])
@@ -1003,13 +926,9 @@ class SendRMQMessageConfigTab(BaseConfigTab):
         self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
         self.send_btn.grid(row=3, column=5, sticky="e", pady=10)
         # 响应结果
-        ttk.Label(frame, text="响应结果:").grid(
-            row=4, column=0, sticky="ne", padx=5, pady=5
-        )
+        ttk.Label(frame, text="响应结果:").grid(row=4, column=0, sticky="ne", padx=5, pady=5)
         self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(
-            row=4, column=1, columnspan=5, padx=5, pady=5, sticky="ew"
-        )
+        self.result_text.grid(row=4, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
 
     def update_status(self, status):
         pass
@@ -1022,9 +941,7 @@ class SendRMQMessageConfigTab(BaseConfigTab):
         password = self.pass_entry.get() or None
         body = self.body_text.get(1.0, END).strip()
         try:
-            producer = FastRMQProducer(
-                host, port=port, username=username, password=password
-            )
+            producer = FastRMQProducer(host, port=port, username=username, password=password)
             producer.send(queue, message=json.loads(body))
             producer.close()
             result = "Message sent to RabbitMQ."

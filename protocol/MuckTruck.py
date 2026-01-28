@@ -2,7 +2,7 @@
 import json
 from typing import Optional
 from datetime import datetime
-from core.protocol_parser import ProtocolParser, ParserRegistry
+from core.protocol_parser import ProtocolParser, ParserRegistry, ImageInfoType
 
 
 class MuckTruckParser(ProtocolParser):
@@ -16,9 +16,7 @@ class MuckTruckParser(ProtocolParser):
 
             json_data = json.loads(data)
             event_type = json_data.get("eventType", json_data.get("event_type", "N/A"))
-            timestamp = json_data.get(
-                "dateTime", json_data.get("timestamp", datetime.now().isoformat())
-            )
+            timestamp = json_data.get("dateTime", json_data.get("timestamp", datetime.now().isoformat()))
 
             return {
                 "type": "JSON",
@@ -34,26 +32,21 @@ class MuckTruckParser(ProtocolParser):
                 "timestamp": datetime.now().isoformat(),
             }
 
-    def extract_image_info(self, parsed_data: dict) -> Optional[dict]:
+    def extract_image_info(self, parsed_data: dict) -> Optional[ImageInfoType]:
         print(parsed_data)
         try:
             json_data = json.loads(parsed_data["raw_content"])
             print(json_data)
-            url = json_data["MuckTruckTargetAnalysisEvent"]["analysisResultList"][0][
-                "pictureFile"
-            ]["resourcesContent"]
+            url = json_data["MuckTruckTargetAnalysisEvent"]["analysisResultList"][0]["pictureFile"]["resourcesContent"]
 
             if url is None:
                 raise ValueError("No image URL found")
             rectList = []
-            for target in json_data["MuckTruckTargetAnalysisEvent"][
-                "analysisResultList"
-            ][0]["targetList"]:
+            for target in json_data["MuckTruckTargetAnalysisEvent"]["analysisResultList"][0]["targetList"]:
                 if "yes" != target["muckTruck"]["valueString"]:
                     continue
 
                 rectInfo = {
-                    "type": "rect",
                     "rect": target["targetRect"],
                     "marks": [
                         {"name": "cover", "value": target["coverPlate"]["valueString"]},
@@ -72,7 +65,7 @@ class MuckTruckParser(ProtocolParser):
             return {
                 "url": url,
                 "filename": filename,
-                "rectList": rectList,
+                "targetList": rectList,
             }
         except Exception as e:
             print(f"提取图片信息失败: {e}")

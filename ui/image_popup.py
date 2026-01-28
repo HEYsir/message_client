@@ -51,9 +51,7 @@ class ImagePopup:
         image_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # 图片显示画布 - 用于自适应显示
-        self.popup_image_canvas = tk.Canvas(
-            image_container, bg="white", highlightthickness=0
-        )
+        self.popup_image_canvas = tk.Canvas(image_container, bg="white", highlightthickness=0)
         self.popup_image_canvas.pack(fill=tk.BOTH, expand=True)
 
         # 在画布上创建图片显示区域
@@ -73,9 +71,7 @@ class ImagePopup:
         self.popup_image_label.pack(fill=tk.BOTH, expand=True)
 
         # 图片信息标签
-        self.popup_image_info_label = tk.Label(
-            image_container, text="", font=("Arial", 10), fg="gray", bg="white"
-        )
+        self.popup_image_info_label = tk.Label(image_container, text="", font=("Arial", 10), fg="gray", bg="white")
         self.popup_image_info_label.pack(fill=tk.X, padx=10, pady=5)
 
         # 矩形框和标签侧边栏（右侧）- 固定大小
@@ -101,15 +97,11 @@ class ImagePopup:
         control_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # 显示全部按钮
-        self.show_all_btn = ttk.Button(
-            control_frame, text="显示全部", command=self.show_all_rects
-        )
+        self.show_all_btn = ttk.Button(control_frame, text="显示全部", command=self.show_all_rects)
         self.show_all_btn.pack(side=LEFT, padx=2)
 
         # 隐藏全部按钮
-        self.hide_all_btn = ttk.Button(
-            control_frame, text="隐藏全部", command=self.hide_all_rects
-        )
+        self.hide_all_btn = ttk.Button(control_frame, text="隐藏全部", command=self.hide_all_rects)
         self.hide_all_btn.pack(side=LEFT, padx=2)
 
         # 矩形框列表
@@ -121,9 +113,7 @@ class ImagePopup:
         scrollbar.pack(side=RIGHT, fill=tk.Y)
 
         # 矩形框列表
-        self.rect_listbox = tk.Listbox(
-            list_frame, selectmode=tk.SINGLE, yscrollcommand=scrollbar.set
-        )
+        self.rect_listbox = tk.Listbox(list_frame, selectmode=tk.SINGLE, yscrollcommand=scrollbar.set)
         self.rect_listbox.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.rect_listbox.yview)
 
@@ -137,24 +127,23 @@ class ImagePopup:
         self.current_rects = []
 
         # 检查是否有矩形框信息
-        if "rectList" in image_info and image_info["rectList"]:
-            for i, rect_info in enumerate(image_info["rectList"]):
-                if rect_info["type"] == "rect":
-                    # 提取标记信息
-                    marks = rect_info.get("marks", [])
-                    mark_text = ""
-                    if marks:
-                        # 显示所有标记，而不只是值为 'true' 的标记
-                        mark_display = [
-                            f"{mark['name']}:{mark['value']}" for mark in marks
-                        ]
-                        if mark_display:
-                            mark_text = f" - {', '.join(mark_display)}"
-
-                    # 添加到列表
-                    rect_text = f"目标 {i+1}{mark_text}"
-                    self.rect_listbox.insert(tk.END, rect_text)
-                    self.current_rects.append(rect_info)
+        if "targetList" in image_info and image_info["targetList"]:
+            for i, target_info in enumerate(image_info["targetList"]):
+                # 提取标记信息
+                marks = target_info.get("marks", [])
+                mark_text = ""
+                if marks:
+                    # 显示所有标记，而不只是值为 'true' 的标记
+                    mark_display = [f"{mark['name']}:{mark['value']}" for mark in marks]
+                    if mark_display:
+                        mark_text = f" - {', '.join(mark_display)}"
+                if target_info.get("rect"):
+                    self.rect_listbox.insert(tk.END, f"目标 {i+1}{mark_text}")
+                    self.current_rects.append(target_info)
+                elif target_info.get("CoordinateList"):
+                    coord_count = len(target_info["CoordinateList"])
+                    self.rect_listbox.insert(tk.END, f"目标 {i+1}{mark_text}")
+                    self.current_rects.append(target_info)
 
         # 重置选择状态 - 但保留当前选择状态
         # 只有在没有选择且没有显示全部时才重置
@@ -291,8 +280,8 @@ class ImagePopup:
             # 更新矩形框侧边栏
             self.update_rect_sidebar(image_info)
 
-            # 如果有rectList，根据选择状态绘制矩形框
-            if "rectList" in image_info and image_info["rectList"]:
+            # 如果有 targetList，根据选择状态绘制矩形框
+            if "targetList" in image_info and image_info["targetList"]:
                 # 创建可绘制的图像副本
                 drawable_image = image.copy()
                 draw = ImageDraw.Draw(drawable_image)
@@ -306,15 +295,15 @@ class ImagePopup:
                 # 根据选择状态绘制矩形框
                 if self.show_all_rects_flag:
                     # 显示所有矩形框
-                    for i, rect_info in enumerate(image_info["rectList"]):
-                        self.draw_rect(draw, rect_info, drawable_image, font, i, scale)
+                    for i, target_info in enumerate(image_info["targetList"]):
+                        self.draw_rect(draw, target_info, drawable_image, font, i, scale)
                 elif self.selected_rect_index is not None:
                     # 只显示选中的矩形框
-                    if self.selected_rect_index < len(image_info["rectList"]):
-                        rect_info = image_info["rectList"][self.selected_rect_index]
+                    if self.selected_rect_index < len(image_info["targetList"]):
+                        target_info = image_info["targetList"][self.selected_rect_index]
                         self.draw_rect(
                             draw,
-                            rect_info,
+                            target_info,
                             drawable_image,
                             font,
                             self.selected_rect_index,
@@ -349,13 +338,13 @@ class ImagePopup:
             file_size = os.path.getsize(image_path)
             file_size_kb = file_size / 1024
 
-            rect_info = ""
-            if "rectList" in image_info and image_info["rectList"]:
-                rect_count = len(image_info["rectList"])
-                rect_info = f" | 检测到 {rect_count} 个目标"
+            target_info = ""
+            if "targetList" in image_info and image_info["targetList"]:
+                rect_count = len(image_info["targetList"])
+                target_info = f" | 检测到 {rect_count} 个目标"
 
             display_width, display_height = image.size
-            image_info_text = f"原始尺寸: {original_width}x{original_height} | 显示尺寸: {display_width}x{display_height} | 大小: {file_size_kb:.1f}KB{rect_info}"
+            image_info_text = f"原始尺寸: {original_width}x{original_height} | 显示尺寸: {display_width}x{display_height} | 大小: {file_size_kb:.1f}KB{target_info}"
             self.popup_image_info_label.config(text=image_info_text)
 
         except Exception as e:
@@ -366,11 +355,11 @@ class ImagePopup:
             self.popup_image_label.config(image="", text="显示失败")
             self.popup_image_info_label.config(text="")
 
-    def draw_rect(self, draw, rect_info, image, font, index, scale=1.0):
-        """在弹窗中绘制单个矩形框及其标记信息"""
-        if rect_info["type"] == "rect":
-            rect_data = rect_info["rect"]
-            marks = rect_info.get("marks", [])
+    def draw_rect(self, draw, target_info, image, font, index, scale=1.0):
+        """在弹窗中绘制单个矩形框及其标记信息和坐标点区域"""
+        if target_info.get("rect"):
+            rect_data = target_info["rect"]
+            marks = target_info.get("marks", [])
 
             # 将相对坐标转换为绝对坐标（考虑缩放比例）
             x1 = int(rect_data["x"] * image.width)
@@ -390,6 +379,22 @@ class ImagePopup:
                 draw.rectangle(bbox, fill="red")
                 # 绘制文本
                 draw.text((x1, text_y + j * 15), text, fill="white", font=font)
+
+        elif target_info.get("CoordinateList"):
+            # 绘制CoordinateList坐标点区域
+            self.draw_coordinate_list(draw, target_info["CoordinateList"], image, index)
+
+    def draw_coordinate_list(self, draw, coordinate_list, image, index):
+        """绘制CoordinateList坐标点区域
+
+        Args:
+            draw: ImageDraw对象
+            coordinate_list: 坐标点列表 [{"x": x, "y": y}, ...]
+            image: PIL图像对象
+            index: 目标索引
+        """
+        if not coordinate_list or len(coordinate_list) < 2:
+            return
 
     def close(self):
         """关闭弹窗"""
