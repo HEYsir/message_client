@@ -142,6 +142,43 @@ class BaseAlarmParser(ProtocolParser):
                 "timestamp": datetime.now().isoformat(),
             }
 
+    # 周界、室内目标识别
+    def get_identify_info(self, content: str) -> List[MarkType]:
+        mark_list = []
+        try:
+            root = ET.fromstring(content)
+            ns = {"ns": "http://www.isapi.org/ver20/XMLSchema"}
+
+            # 查找DetectionRegionEntry
+            human_entry_list = root.findall(".//ns:humanInfoList", ns)
+            if human_entry_list is None:
+                return mark_list
+
+            # 解析区域信息
+            for human_entry in human_entry_list:
+                target_info = {}
+                # 解析TargetRect
+                identify_list = human_entry.find(".//ns:identifyList", ns)
+                if identify_list is None:
+                    continue
+                for identify_elem in identify_list:
+                    # 获取positionX和positionY
+                    candidate_list = identify_elem.find(".//ns:candidateList", ns)
+                    if candidate_list is None:
+                        continue
+                    for candidate_elem in candidate_list:
+                        FDID = candidate_elem.find(".//ns:FDID", ns)
+                        similarity = candidate_elem.find(".//ns:similarity", ns)
+                        if FDID is None or similarity is None:
+                            continue
+                        mark_list.append({"name": "人脸ID", "value": FDID.text})
+                        mark_list.append({"name": "相似度", "value": similarity.text})
+            return mark_list
+
+        except Exception as e:
+            print(f"解析目标信息失败: {e}")
+            return []
+
     def get_target_info(self, content: str) -> Optional[targetType]:
         """
         解析获取RegionCoordinatesList中的坐标点信息
@@ -264,6 +301,10 @@ class BaseAlarmParser(ProtocolParser):
 
                 regionID = detection_region_entry.find(".//ns:regionID", ns)
                 target_info["marks"] = [{"name": "检测区域", "value": regionID.text}]
+
+                mark_list = self.get_identify_info(content)
+                target_info["marks"].extend(mark_list)
+
                 target_info_list.append(target_info)
             return target_info_list
 
