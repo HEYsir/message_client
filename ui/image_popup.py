@@ -396,6 +396,126 @@ class ImagePopup:
         if not coordinate_list or len(coordinate_list) < 2:
             return
 
+        # 将坐标点转换为图片像素坐标，并确保在图片范围内
+        points = []
+        for coord in coordinate_list:
+            # 假设坐标点是相对于图片宽高的比例值（0-1之间）
+            if 0 <= coord["x"] <= 1 and 0 <= coord["y"] <= 1:
+                # 相对坐标转换
+                x = int(coord["x"] * image.width)
+                y = int(coord["y"] * image.height)
+            else:
+                # 绝对坐标（直接使用）
+                x = int(coord["x"] * image.width / 1000)
+                y = int(coord["y"] * image.height / 1000)
+
+            # 确保坐标点在图片范围内
+            x = max(0, min(x, image.width - 1))
+            y = max(0, min(y, image.height - 1))
+
+            points.append((x, y))
+
+        # 使用凸包算法对坐标点进行排序，避免多边形交叉
+        def convex_hull(points):
+            """计算点的凸包（使用Graham Scan算法）"""
+            if len(points) <= 3:
+                return points
+
+            # 找到最左下角的点作为起点
+            start = min(points, key=lambda p: (p[1], p[0]))
+
+            # 计算每个点相对于起点的极角
+            def polar_angle(p):
+                import math
+
+                dx = p[0] - start[0]
+                dy = p[1] - start[1]
+                return math.atan2(dy, dx)
+
+            # 按极角排序，极角相同的按距离排序
+            sorted_points = sorted(
+                points, key=lambda p: (polar_angle(p), (p[0] - start[0]) ** 2 + (p[1] - start[1]) ** 2)
+            )
+
+            # 构建凸包
+            hull = [start]
+            for p in sorted_points:
+                if p == start:
+                    continue
+                while len(hull) > 1:
+                    # 检查是否是右转
+                    a, b = hull[-2], hull[-1]
+                    cross = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+                    if cross >= 0:  # 右转或共线
+                        break
+                    hull.pop()
+                hull.append(p)
+
+            return hull
+
+        # 使用凸包算法排序坐标点
+        if len(points) >= 3:
+            points = convex_hull(points)
+        else:
+            # 对于2个点，保持原有顺序
+            pass
+
+        # 坐标点颜色，根据索引使用不同颜色
+        colors = ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray"]
+        color = colors[index % len(colors)]
+
+        # 绘制坐标点
+        point_radius = 4
+        for idx, point in enumerate(points):
+            x, y = point
+            # 绘制实心圆点
+            draw.ellipse(
+                [x - point_radius, y - point_radius, x + point_radius, y + point_radius],
+                fill=color,
+                outline=color,
+                width=2,
+            )
+            # 在每个点上显示点的编号
+            draw.text(
+                (x - point_radius, y - point_radius),
+                str(idx + 1),
+                fill="white",
+                font=ImageFont.load_default(),
+            )
+
+        # 如果只有2个点，绘制直线
+        if len(points) == 2:
+            draw.line([points[0], points[1]], fill=color, width=2)
+
+        # 如果有3个或更多点，绘制多边形区域
+        elif len(points) >= 3:
+            # 按顺时针或逆时针顺序连接所有点形成闭合区域
+            # 这里使用PIL的polygon方法会自动处理闭合
+            draw.polygon(points, outline=color, width=2)
+
+        # 在第一个点附近显示目标编号
+        if points:
+            first_point = points[0]
+            text = f"target {index+1}"
+            # 计算文本位置（避免超出图片边界）
+            text_x = first_point[0] + 10
+            text_y = first_point[1] - 15
+
+            # 确保文本在图片范围内
+            text_x = max(5, min(text_x, image.width - 50))
+            text_y = max(15, min(text_y, image.height - 5))
+
+            # 绘制文本背景
+            try:
+                font = ImageFont.truetype("arial.ttf", 12)
+            except:
+                font = ImageFont.load_default()
+
+            bbox = draw.textbbox((text_x, text_y), text, font=font)
+            draw.rectangle(bbox, fill=color)
+            # 绘制文本
+            draw.text((text_x, text_y), text, fill="white", font=font)
+
     def close(self):
         """关闭弹窗"""
         if self.popup:
