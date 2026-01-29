@@ -5,21 +5,22 @@ from tkinter import ttk, filedialog
 from tkinter import END
 from typing import Type, Dict
 
+
 class BaseConfigTab(ABC):
     """标签页基类"""
 
     def get_tab_name(self) -> str:
         return self.config_vars["name"]
-    
+
     def __init__(self, parent):
         self.parent = parent
         self.config_vars = {}
         self._init_config_vars()
-        
+
         # 创建框架作为标签页内容
         self.frame = ttk.Frame(parent)
         self.frame.pack(fill="both", expand=True)
-        
+
         # 创建标签页内容
         self.create_tab_content()
 
@@ -32,7 +33,7 @@ class BaseConfigTab(ABC):
     def create_tab_content(self):
         """创建标签页具体内容（由子类实现）"""
         pass
-    
+
     @abstractmethod
     def update_status(self):
         """创建标签页具体内容（由子类实现）"""
@@ -42,13 +43,15 @@ class BaseConfigTab(ABC):
         """浏览文件并设置到输入框"""
         filepath = filedialog.askopenfilename()
         if filepath:
-            entry_widget.configure(state='normal')
+            entry_widget.configure(state="normal")
             entry_widget.delete(0, END)
             entry_widget.insert(0, filepath)
-            entry_widget.configure(state='readonly')
+            entry_widget.configure(state="readonly")
+
 
 class CollapsibleNotebook(ttk.Frame):
     """可折叠的标签页容器 - 保留标签选择条"""
+
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
@@ -58,26 +61,23 @@ class CollapsibleNotebook(ttk.Frame):
         # 创建顶部框架（包含折叠按钮和标签选择条）
         self.top_frame = ttk.Frame(self)
         self.top_frame.pack(fill="x", side="top")
-        
+
         # 折叠/展开按钮
         self.toggle_btn = ttk.Button(
-            self.top_frame,
-            text="▲ 折叠",  # 向上箭头表示展开状态
-            command=self.toggle,
-            width=8
+            self.top_frame, text="▲ 折叠", command=self.toggle, width=8  # 向上箭头表示展开状态
         )
         self.toggle_btn.pack(side="right", padx=(0, 10), pady=5)
-        
+
         # 标签页容器（只包含标签选择条）
         self.notebook = ttk.Notebook(self.top_frame)
         self.notebook.pack(side="left", fill="x", expand=True)
-        
+
         # 内容容器（可折叠）
         self.content_frame = ttk.Frame(self)
         self.content_frame.pack(fill="both", expand=True)
-        
+
         # 标签页字典（存储标签页内容框架）
-        self.tabs:Dict[str, BaseConfigTab] = {}
+        self.tabs: Dict[str, BaseConfigTab] = {}
         # 绑定标签切换事件
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
@@ -96,7 +96,7 @@ class CollapsibleNotebook(ttk.Frame):
 
         # 存储标签页实例
         self.tabs[tab_name] = tab
-        
+
         # 默认隐藏所有标签页内容
         # tab.frame.pack_forget()
         # 如果是第一个标签页，设置为当前标签页
@@ -104,7 +104,7 @@ class CollapsibleNotebook(ttk.Frame):
             self.current_tab = tab_name
             self.tabs[tab_name].frame.pack(fill="both", expand=True)
         return tab
-    
+
     def register_tab_change_callback(self, callback):
         """注册外部标签页切换回调函数"""
         if not callable(callback):
@@ -133,7 +133,7 @@ class CollapsibleNotebook(ttk.Frame):
         # 隐藏所有标签页内容
         for tab in self.tabs.values():
             tab.frame.pack_forget()
-        
+
         # 显示当前标签页内容
         if self.current_tab in self.tabs:
             self.tabs[self.current_tab].frame.pack(fill="both", expand=True)
@@ -152,12 +152,10 @@ class CollapsibleNotebook(ttk.Frame):
             self.expanded = True
             # 确保显示当前标签页内容
             self._update_tab_display()
-    
+
         # 重新布局父容器
         self.parent.update_idletasks()
-    
+
     def get_selected_tab(self) -> str:
         """获取当前选中的标签页名称"""
         return self.current_tab if self.current_tab else ""
-
-

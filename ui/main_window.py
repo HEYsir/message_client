@@ -1,3 +1,7 @@
+import sys
+import importlib
+from pathlib import Path
+
 import tkinter as tk
 from tkinter import (
     ttk,
@@ -29,12 +33,15 @@ import re
 import os
 import uuid
 from datetime import datetime
+from enum import Enum
 
 from core.protocol_parser import ParserRegistry
 from core.image_handler import ImageHandler
-from application.http.send import FastHTTPPost
-from application.kafka.producer import FastKafkaProducer
-from application.rmq.producer import FastRMQProducer
+
+
+class UITableType(Enum):
+    RECV = "recv"
+    SEND = "send"
 
 
 def special_ui_tabs(app_path, module_name: str):
@@ -79,15 +86,23 @@ def discover_ui_tabs():
         return
 
     special_ui_tabs(app_path, "ui_config_tab")
+    special_ui_tabs(app_path, "ui_send_tab")
+
 
 class MainWindow:
     # 用于存储已注册的配置页面类
     _recv_tabs: List[Type[BaseConfigTab]] = []
+    _send_tabs: List[Type[BaseConfigTab]] = []
 
     @classmethod
-    def register_config_tab(cls, tab_class: Type[BaseConfigTab]):
+    def register_config_tab(cls, tab_type: UITableType, tab_class: Type[BaseConfigTab]):
         """注册配置标签页"""
-        cls._recv_tabs.append(tab_class)
+        if tab_type == UITableType.RECV:
+            cls._recv_tabs.append(tab_class)
+        elif tab_type == UITableType.SEND:
+            cls._send_tabs.append(tab_class)
+        else:
+            raise ValueError(f"Unknown tab type: {tab_type}")
 
     def __init__(self, root):
         self.root = root
@@ -209,9 +224,9 @@ class MainWindow:
 
         self.send_tab_container = CollapsibleNotebook(message_send_frame)
         self.send_tab_container.pack(fill="both", expand=True, padx=10, pady=10)
-        self.send_tab_container.add_tab(SendMessageConfigTab)
-        self.send_tab_container.add_tab(SendKafkaMessageConfigTab)
-        self.send_tab_container.add_tab(SendRMQMessageConfigTab)
+        # 加载所有已注册的配置页面
+        for tab_class in self._send_tabs:
+            self.send_tab_container.add_tab(tab_class)
 
     def create_service_area(self, main_paned):
         """创建服务配置区域"""
@@ -782,218 +797,6 @@ class MainWindow:
         # 关闭图片弹窗
         if hasattr(self, "image_popup"):
             self.image_popup.close()
-
-
-class SendMessageConfigTab(BaseConfigTab):
-    def _init_config_vars(self):
-        self.config_vars.update(
-            {
-                "name": "HTTP消息发送",
-                "host": "0.0.0.0",
-                "port": "8000",
-                "url_path": "/httpalarm",
-                "body": '{"msg":"hello"}',
-                "result": "",
-            }
-        )
-
-    def create_tab_content(self):
-        # 与 HTTPConfigTab 配置区一致，消息体和应答区左右布局
-        frame = ttk.Frame(self.frame)
-        frame.pack(fill="both", padx=10, pady=10)
-        # 顶部配置区
-        top_frame = ttk.Frame(frame)
-        top_frame.pack(fill="x", padx=5, pady=5)
-        ttk.Label(top_frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.host_var = tk.StringVar(value=self.config_vars["host"])
-        ip_list = [self.config_vars["host"]]
-        self.host_combo = ttk.Combobox(top_frame, textvariable=self.host_var, values=ip_list, state="readonly")
-        self.host_combo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        ttk.Label(top_frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.port_entry = ttk.Entry(top_frame, width=8)
-        self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
-        self.port_entry.insert(0, self.config_vars["port"])
-        ttk.Label(top_frame, text="路径:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
-        self.path_entry = ttk.Entry(top_frame, width=16)
-        self.path_entry.grid(row=0, column=5, padx=5, pady=5, sticky="w")
-        self.path_entry.insert(0, self.config_vars["url_path"])
-        # 主体左右分割区
-        main_paned = PanedWindow(frame, orient=HORIZONTAL)
-        main_paned.pack(fill="both", expand=True, padx=5, pady=5)
-        # 左侧：消息体
-        left_frame = ttk.LabelFrame(main_paned, text="消息体(JSON)")
-        self.body_text = tk.Text(left_frame, width=40, height=12)
-        self.body_text.pack(fill="both", expand=True, padx=5, pady=5)
-        self.body_text.insert(1.0, self.config_vars["body"])
-        self.send_btn = ttk.Button(left_frame, text="发送消息", command=self.send_message)
-        self.send_btn.pack(anchor="se", padx=5, pady=5)
-        main_paned.add(left_frame)
-        # 右侧：响应结果
-        right_frame = ttk.LabelFrame(main_paned, text="响应结果")
-        self.result_text = tk.Text(right_frame, width=40, height=12, state=DISABLED)
-        self.result_text.pack(fill="both", expand=True, padx=5, pady=5)
-        main_paned.add(right_frame)
-
-    def update_status(self, status):
-        pass
-
-    def send_message(self):
-        host = self.host_var.get()
-        port = self.port_entry.get()
-        path = self.path_entry.get()
-        url = f"http://{host}:{port}{path}"
-        body = self.body_text.get(1.0, END).strip()
-        try:
-            poster = FastHTTPPost(url)
-            status, headers, content = poster.post(json_data=json.loads(body))
-            result = f"Status: {status}\nHeaders: {headers}\nContent: {content.decode('utf-8', errors='replace')}"
-        except Exception as e:
-            result = f"Error: {e}"
-        self.result_text.config(state=NORMAL)
-        self.result_text.delete(1.0, END)
-        self.result_text.insert(END, result)
-        self.result_text.config(state=DISABLED)
-
-
-class SendKafkaMessageConfigTab(BaseConfigTab):
-    def _init_config_vars(self):
-        self.config_vars.update(
-            {
-                "name": "Kafka消息发送",
-                "bootstrap_servers": "127.0.0.1:9092",
-                "topic": "STATIC_HUMAN_EXCEPTION_TOPIC",
-                "key": "",
-                "body": '{"msg":"hello kafka"}',
-                "result": "",
-            }
-        )
-
-    def create_tab_content(self):
-        frame = ttk.Frame(self.frame)
-        frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="服务地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.servers_entry = ttk.Entry(frame, width=40)
-        self.servers_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.servers_entry.insert(0, self.config_vars["bootstrap_servers"])
-        ttk.Label(frame, text="主题:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.topic_entry = ttk.Entry(frame, width=24)
-        self.topic_entry.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
-        self.topic_entry.insert(0, self.config_vars["topic"])
-        ttk.Label(frame, text="Key(Optional):").grid(row=0, column=4, padx=5, pady=5, sticky="e")
-        self.key_entry = ttk.Entry(frame, width=16)
-        self.key_entry.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
-        self.key_entry.insert(0, self.config_vars["key"])
-        # 消息体
-        ttk.Label(frame, text="消息体(JSON):").grid(row=1, column=0, sticky="ne", padx=5, pady=5)
-        self.body_text = tk.Text(frame, width=60, height=8)
-        self.body_text.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
-        self.body_text.insert(1.0, self.config_vars["body"])
-        # 发送按钮
-        self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
-        self.send_btn.grid(row=2, column=5, sticky="e", pady=10)
-        # 响应结果
-        ttk.Label(frame, text="响应结果:").grid(row=3, column=0, sticky="ne", padx=5, pady=5)
-        self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(row=3, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
-
-    def update_status(self, status):
-        pass
-
-    def send_message(self):
-        servers = self.servers_entry.get()
-        topic = self.topic_entry.get()
-        key = self.key_entry.get() or None
-        body = self.body_text.get(1.0, END).strip()
-        try:
-            producer = FastKafkaProducer(servers)
-            producer.send(
-                topic,
-                value=json.loads(body),
-                key=key,
-                on_delivery=FastKafkaProducer.default_delivery_report,
-            )
-            producer.flush()
-            result = "Message sent to Kafka."
-        except Exception as e:
-            result = f"Error: {e}"
-        self.result_text.config(state=NORMAL)
-        self.result_text.delete(1.0, END)
-        self.result_text.insert(END, result)
-        self.result_text.config(state=DISABLED)
-
-
-class SendRMQMessageConfigTab(BaseConfigTab):
-    def _init_config_vars(self):
-        self.config_vars.update(
-            {
-                "name": "RabbitMQ消息发送",
-                "host": "127.0.0.1",
-                "port": 5672,
-                "queue": "test",
-                "username": "",
-                "password": "",
-                "body": '{"msg":"hello rmq"}',
-                "result": "",
-            }
-        )
-
-    def create_tab_content(self):
-        frame = ttk.Frame(self.frame)
-        frame.pack(fill="both", padx=10, pady=10)
-        ttk.Label(frame, text="主机地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.host_entry = ttk.Entry(frame, width=24)
-        self.host_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.host_entry.insert(0, self.config_vars["host"])
-        ttk.Label(frame, text="端口:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.port_entry = ttk.Entry(frame, width=8)
-        self.port_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
-        self.port_entry.insert(0, str(self.config_vars["port"]))
-        ttk.Label(frame, text="队列名称:").grid(row=0, column=4, padx=5, pady=5, sticky="e")
-        self.queue_entry = ttk.Entry(frame, width=16)
-        self.queue_entry.grid(row=0, column=5, padx=5, pady=5, sticky="ew")
-        self.queue_entry.insert(0, self.config_vars["queue"])
-        ttk.Label(frame, text="用户名:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
-        self.user_entry = ttk.Entry(frame, width=16)
-        self.user_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        self.user_entry.insert(0, self.config_vars["username"])
-        ttk.Label(frame, text="密码:").grid(row=1, column=2, padx=5, pady=5, sticky="e")
-        self.pass_entry = ttk.Entry(frame, width=16, show="*")
-        self.pass_entry.grid(row=1, column=3, padx=5, pady=5, sticky="ew")
-        self.pass_entry.insert(0, self.config_vars["password"])
-        # 消息体
-        ttk.Label(frame, text="消息体(JSON):").grid(row=2, column=0, sticky="ne", padx=5, pady=5)
-        self.body_text = tk.Text(frame, width=60, height=8)
-        self.body_text.grid(row=2, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
-        self.body_text.insert(1.0, self.config_vars["body"])
-        # 发送按钮
-        self.send_btn = ttk.Button(frame, text="发送消息", command=self.send_message)
-        self.send_btn.grid(row=3, column=5, sticky="e", pady=10)
-        # 响应结果
-        ttk.Label(frame, text="响应结果:").grid(row=4, column=0, sticky="ne", padx=5, pady=5)
-        self.result_text = tk.Text(frame, width=60, height=8, state=DISABLED)
-        self.result_text.grid(row=4, column=1, columnspan=5, padx=5, pady=5, sticky="ew")
-
-    def update_status(self, status):
-        pass
-
-    def send_message(self):
-        host = self.host_entry.get()
-        port = int(self.port_entry.get())
-        queue = self.queue_entry.get()
-        username = self.user_entry.get() or None
-        password = self.pass_entry.get() or None
-        body = self.body_text.get(1.0, END).strip()
-        try:
-            producer = FastRMQProducer(host, port=port, username=username, password=password)
-            producer.send(queue, message=json.loads(body))
-            producer.close()
-            result = "Message sent to RabbitMQ."
-        except Exception as e:
-            result = f"Error: {e}"
-        self.result_text.config(state=NORMAL)
-        self.result_text.delete(1.0, END)
-        self.result_text.insert(END, result)
-        self.result_text.config(state=DISABLED)
 
 
 discover_ui_tabs()

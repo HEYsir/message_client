@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import ttk
 from ui.base_tab import BaseConfigTab
-from ui.main_window import MainWindow
+from ui.main_window import MainWindow, UITableType
 import pyperclip
 from tkinter import messagebox
 from application.http.service import HTTPServer
@@ -33,19 +33,13 @@ class HTTPConfigTab(BaseConfigTab):
         frame.pack(fill="both", padx=10)
 
         # 监听地址
-        ttk.Label(frame, text="监听地址:").grid(
-            row=0, column=0, padx=5, pady=5, sticky="e"
-        )
+        ttk.Label(frame, text="监听地址:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         # IP下拉框
         self.host_var = StringVar()
         ip_list = get_local_ip_list()
-        self.host_combo = ttk.Combobox(
-            frame, textvariable=self.host_var, values=ip_list, state="readonly"
-        )
+        self.host_combo = ttk.Combobox(frame, textvariable=self.host_var, values=ip_list, state="readonly")
         self.host_combo.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.host_combo.set(
-            self.config_vars.get("host", ip_list[0] if ip_list else "0.0.0.0")
-        )
+        self.host_combo.set(self.config_vars.get("host", ip_list[0] if ip_list else "0.0.0.0"))
         self.host_combo.bind("<<ComboboxSelected>>", self.update_url)
 
         # 端口
@@ -56,9 +50,7 @@ class HTTPConfigTab(BaseConfigTab):
         self.port_entry.bind("<KeyRelease>", self.update_url)
 
         # 启动按钮
-        self.start_btn = ttk.Button(
-            frame, text="启动服务", command=self._toggle_service
-        )
+        self.start_btn = ttk.Button(frame, text="启动服务", command=self._toggle_service)
         self.start_btn.grid(row=0, column=4, columnspan=2, padx=10, pady=5)
 
         # URL显示区域
@@ -81,9 +73,7 @@ class HTTPConfigTab(BaseConfigTab):
 
     def update_url(self, event=None):
         """更新HTTP服务URL显示"""
-        self.server_url = (
-            f"http://{self.host_var.get()}:{self.port_entry.get().strip()}/httpalarm"
-        )
+        self.server_url = f"http://{self.host_var.get()}:{self.port_entry.get().strip()}/httpalarm"
         self.url_label.config(text=self.server_url)
 
     def copy_url_to_clipboard(self, event=None):
@@ -140,4 +130,4 @@ class HTTPConfigTab(BaseConfigTab):
 
 
 # 注册配置页面
-MainWindow.register_config_tab(HTTPConfigTab)
+MainWindow.register_config_tab(UITableType.RECV, HTTPConfigTab)
