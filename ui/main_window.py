@@ -37,14 +37,57 @@ from application.kafka.producer import FastKafkaProducer
 from application.rmq.producer import FastRMQProducer
 
 
+def special_ui_tabs(app_path, module_name: str):
+    if not module_name:
+        print(f"[special_ui_tabs] module_name[{module_name}] empty")
+        return
+
+    for item in os.listdir(app_path):
+        item_path = os.path.join(app_path, item)
+        if not os.path.isdir(item_path) or item.startswith("__"):
+            continue
+        if not os.path.exists(os.path.join(item_path, f"{module_name}.py")):
+            continue
+        module_path = f"application.{item}.{module_name}"
+        print(f"[discover_recv_tabs] Try import: {module_path}")
+        try:
+            importlib.import_module(module_path)
+            print(f"[discover_recv_tabs] Successfully imported: {module_path}")
+        except (ImportError, SyntaxError) as e:
+            print(f"Error: Could not load config tab from {module_path}: {e}")
+
+
+def discover_ui_tabs():
+    """自动发现并导入所有配置标签页，兼容cx_Freeze打包路径"""
+    # 1. 优先用 sys._MEIPASS（PyInstaller），2. 用 sys.executable 目录（cx_Freeze），3. 用 __file__ 目录（源码）
+    if hasattr(sys, "_MEIPASS"):
+        app_path = sys._MEIPASS / "application"
+    else:
+        print(f"froze:{getattr(sys, "frozen", False)}")
+        if getattr(sys, "frozen", False):
+            print(sys.executable)
+            base_dir = Path(sys.executable).parent
+            app_path = base_dir / "lib/application"
+        else:
+            print(Path(__file__))
+            base_dir = Path(__file__).resolve().parent.parent
+            app_path = Path(base_dir) / "application"
+
+    print(f"[discover_recv_tabs] search application dir: {app_path}")
+    if not os.path.exists(app_path):
+        print(f"Warning: Application directory not found at {app_path}")
+        return
+
+    special_ui_tabs(app_path, "ui_config_tab")
+
 class MainWindow:
     # 用于存储已注册的配置页面类
-    _config_tabs: List[Type[BaseConfigTab]] = []
+    _recv_tabs: List[Type[BaseConfigTab]] = []
 
     @classmethod
     def register_config_tab(cls, tab_class: Type[BaseConfigTab]):
         """注册配置标签页"""
-        cls._config_tabs.append(tab_class)
+        cls._recv_tabs.append(tab_class)
 
     def __init__(self, root):
         self.root = root
@@ -178,7 +221,7 @@ class MainWindow:
         main_paned.add(self.tab_container)
 
         # 加载所有已注册的配置页面
-        for tab_class in self._config_tabs:
+        for tab_class in self._recv_tabs:
             self.tab_container.add_tab(tab_class)
         # 消息列表监听标签页变化
         self.tab_container.register_tab_change_callback(self.on_service_tab_changed)
@@ -951,3 +994,6 @@ class SendRMQMessageConfigTab(BaseConfigTab):
         self.result_text.delete(1.0, END)
         self.result_text.insert(END, result)
         self.result_text.config(state=DISABLED)
+
+
+discover_ui_tabs()
