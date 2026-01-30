@@ -4,6 +4,7 @@ import tkinter as tk
 import json
 from ui.base_tab import BaseConfigTab
 from ui.main_window import MainWindow, UITableType
+from ui.key_value_table import KeyValueTable, KeyValueTableWithCustomHeaders
 from application.http.send import FastHTTPPost
 
 
@@ -119,147 +120,9 @@ class SendMessageConfigTab(BaseConfigTab):
 
     def _create_query_params_tab(self, parent):
         """创建Query参数选项卡"""
-        # 使用简单的框架和滚动条
-        main_frame = ttk.Frame(parent)
-        main_frame.pack(fill="both", expand=True)
-
-        # 创建滚动框架
-        from tkinter import Scrollbar
-
-        # 创建Canvas作为滚动容器
-        canvas = tk.Canvas(main_frame, height=200)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-
-        # 创建内部框架
-        inner_frame = ttk.Frame(canvas)
-
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.create_window((0, 0), window=inner_frame, anchor="nw")
-
-        def configure_scrollregion(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        inner_frame.bind("<Configure>", configure_scrollregion)
-
-        # 表头
-        headers = ["Key", "Value", "描述", "操作"]
-        for i, header in enumerate(headers):
-            ttk.Label(inner_frame, text=header, font=("Arial", 9, "bold")).grid(
-                row=0, column=i, padx=2, pady=2, sticky="ew"
-            )
-
-        # 存储参数行的列表
-        self.query_param_rows = []
-
-        # 添加第一行空参数
-        self._add_query_param_row(inner_frame, 1)
-
-        # 添加参数按钮
-        add_btn = ttk.Button(
-            inner_frame,
-            text="添加参数",
-            command=lambda: self._add_query_param_row(inner_frame, len(self.query_param_rows) + 1),
-        )
-        add_btn.grid(row=100, column=0, columnspan=4, pady=5)
-
-        # 布局
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        return inner_frame
-
-    def _add_query_param_row(self, parent, row_num, existing_data=None):
-        """添加Query参数行"""
-        row_data = existing_data if existing_data else {}
-
-        # 绑定滚轮事件到Entry组件
-        def _on_entry_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        # Key输入框
-        key_var = tk.StringVar(
-            value=existing_data.get("key", "").get() if existing_data and existing_data.get("key") else ""
-        )
-        key_entry = ttk.Entry(parent, textvariable=key_var, width=20)
-        key_entry.grid(row=row_num, column=0, padx=2, pady=1, sticky="ew")
-        key_entry.bind("<MouseWheel>", _on_entry_mousewheel)
-        row_data["key"] = key_var
-
-        # Value输入框
-        value_var = tk.StringVar(
-            value=existing_data.get("value", "").get() if existing_data and existing_data.get("value") else ""
-        )
-        value_entry = ttk.Entry(parent, textvariable=value_var, width=20)
-        value_entry.grid(row=row_num, column=1, padx=2, pady=1, sticky="ew")
-        value_entry.bind("<MouseWheel>", _on_entry_mousewheel)
-        row_data["value"] = value_var
-
-        # 描述输入框
-        desc_var = tk.StringVar(
-            value=existing_data.get("desc", "").get() if existing_data and existing_data.get("desc") else ""
-        )
-        desc_entry = ttk.Entry(parent, textvariable=desc_var, width=25)
-        desc_entry.grid(row=row_num, column=2, padx=2, pady=1, sticky="ew")
-        desc_entry.bind("<MouseWheel>", _on_entry_mousewheel)
-        row_data["desc"] = desc_var
-
-        # 删除按钮
-        def remove_row():
-            # 直接销毁该行的所有组件
-            for widget in parent.grid_slaves(row=row_num):
-                widget.destroy()
-
-            # 从列表中移除行数据
-            if row_data in self.query_param_rows:
-                self.query_param_rows.remove(row_data)
-
-            # 重新构建所有行
-            self._rebuild_query_params(parent)
-
-        remove_btn = ttk.Button(parent, text="删除", command=remove_row, width=6)
-        remove_btn.grid(row=row_num, column=3, padx=2, pady=1)
-        row_data["remove_btn"] = remove_btn
-
-        if not existing_data:
-            self.query_param_rows.append(row_data)
-
-        # 配置列权重
-        parent.columnconfigure(0, weight=1)
-        parent.columnconfigure(1, weight=1)
-        parent.columnconfigure(2, weight=1)
-
-    def _rebuild_query_params(self, parent):
-        """重新构建Query参数行"""
-        # 清空所有参数行（保留表头和添加按钮）
-        for widget in parent.grid_slaves():
-            row = widget.grid_info().get("row", 0)
-            if row > 0 and row < 100:  # 只删除参数行，保留表头和添加按钮
-                widget.destroy()
-
-        # 重新创建所有参数行
-        for i, row_data in enumerate(self.query_param_rows, 1):
-            self._add_query_param_row(parent, i, row_data)
-
-        # 如果所有行都被删除，添加一个空行
-        if not self.query_param_rows:
-            self._add_query_param_row(parent, 1)
-
-    def _reorder_query_params(self, parent):
-        """重新排序Query参数行"""
-        # 获取所有行号并排序（只处理参数行，不处理添加按钮）
-        row_numbers = []
-        for widget in parent.grid_slaves():
-            row = widget.grid_info().get("row", 0)
-            if row > 0 and row < 100 and row not in row_numbers:  # 排除添加按钮行（row=100）
-                row_numbers.append(row)
-
-        row_numbers.sort()
-
-        # 重新排列参数行
-        for i, row_num in enumerate(row_numbers, 1):
-            widgets = parent.grid_slaves(row=row_num)
-            for widget in widgets:
-                widget.grid(row=i)
+        # 使用公共Key-Value组件
+        self.query_params_table = KeyValueTable(parent, headers=["Key", "Value", "描述", "操作"], row_height=200)
+        return self.query_params_table.main_frame
 
     def _create_auth_tab(self, parent):
         """创建认证选项卡"""
@@ -341,144 +204,11 @@ class SendMessageConfigTab(BaseConfigTab):
 
     def _create_headers_tab(self, parent):
         """创建请求头选项卡（类似Query参数）"""
-        # 使用简单的框架和滚动条
-        main_frame = ttk.Frame(parent)
-        main_frame.pack(fill="both", expand=True)
-
-        # 创建Canvas作为滚动容器
-        canvas = tk.Canvas(main_frame, height=200)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-
-        # 创建内部框架
-        inner_frame = ttk.Frame(canvas)
-
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.create_window((0, 0), window=inner_frame, anchor="nw")
-
-        def configure_scrollregion(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        inner_frame.bind("<Configure>", configure_scrollregion)
-
-        # 表头
-        headers = ["Header", "Value", "描述", "操作"]
-        for i, header in enumerate(headers):
-            ttk.Label(inner_frame, text=header, font=("Arial", 9, "bold")).grid(
-                row=0, column=i, padx=2, pady=2, sticky="ew"
-            )
-
-        # 存储请求头行的列表
-        self.header_rows = []
-
-        # 添加第一行空请求头
-        self._add_header_row(inner_frame, 1)
-
-        # 添加请求头按钮
-        add_btn = ttk.Button(
-            inner_frame,
-            text="添加请求头",
-            command=lambda: self._add_header_row(inner_frame, len(self.header_rows) + 1),
+        # 使用公共Key-Value组件，自定义表头为Header
+        self.headers_table = KeyValueTableWithCustomHeaders(
+            parent, headers=["Header", "Value", "描述", "操作"], row_height=200
         )
-        add_btn.grid(row=100, column=0, columnspan=4, pady=5)
-
-        # 布局
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        return inner_frame
-
-    def _add_header_row(self, parent, row_num, existing_data=None):
-        """添加请求头行"""
-        row_data = existing_data if existing_data else {}
-
-        # 绑定滚轮事件到Entry组件
-        def _on_entry_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        # Header输入框
-        header_var = tk.StringVar(
-            value=existing_data.get("header", "").get() if existing_data and existing_data.get("header") else ""
-        )
-        header_entry = ttk.Entry(parent, textvariable=header_var, width=20)
-        header_entry.grid(row=row_num, column=0, padx=2, pady=1, sticky="ew")
-        header_entry.bind("<MouseWheel>", _on_entry_mousewheel)
-        row_data["header"] = header_var
-
-        # Value输入框
-        value_var = tk.StringVar(
-            value=existing_data.get("value", "").get() if existing_data and existing_data.get("value") else ""
-        )
-        value_entry = ttk.Entry(parent, textvariable=value_var, width=20)
-        value_entry.grid(row=row_num, column=1, padx=2, pady=1, sticky="ew")
-        value_entry.bind("<MouseWheel>", _on_entry_mousewheel)
-        row_data["value"] = value_var
-
-        # 描述输入框
-        desc_var = tk.StringVar(
-            value=existing_data.get("desc", "").get() if existing_data and existing_data.get("desc") else ""
-        )
-        desc_entry = ttk.Entry(parent, textvariable=desc_var, width=25)
-        desc_entry.grid(row=row_num, column=2, padx=2, pady=1, sticky="ew")
-        desc_entry.bind("<MouseWheel>", _on_entry_mousewheel)
-        row_data["desc"] = desc_var
-
-        # 删除按钮
-        def remove_row():
-            # 直接销毁该行的所有组件
-            for widget in parent.grid_slaves(row=row_num):
-                widget.destroy()
-
-            # 从列表中移除行数据
-            if row_data in self.header_rows:
-                self.header_rows.remove(row_data)
-
-            # 重新构建所有行
-            self._rebuild_headers(parent)
-
-        remove_btn = ttk.Button(parent, text="删除", command=remove_row, width=6)
-        remove_btn.grid(row=row_num, column=3, padx=2, pady=1)
-        row_data["remove_btn"] = remove_btn
-
-        if not existing_data:
-            self.header_rows.append(row_data)
-
-        # 配置列权重
-        parent.columnconfigure(0, weight=1)
-        parent.columnconfigure(1, weight=1)
-        parent.columnconfigure(2, weight=1)
-
-    def _rebuild_headers(self, parent):
-        """重新构建请求头行"""
-        # 清空所有请求头行（保留表头和添加按钮）
-        for widget in parent.grid_slaves():
-            row = widget.grid_info().get("row", 0)
-            if row > 0 and row < 100:  # 只删除请求头行，保留表头和添加按钮
-                widget.destroy()
-
-        # 重新创建所有请求头行
-        for i, row_data in enumerate(self.header_rows, 1):
-            self._add_header_row(parent, i, row_data)
-
-        # 如果所有行都被删除，添加一个空行
-        if not self.header_rows:
-            self._add_header_row(parent, 1)
-
-    def _reorder_headers(self, parent):
-        """重新排序请求头行"""
-        # 获取所有行号并排序（只处理请求头行，不处理添加按钮）
-        row_numbers = []
-        for widget in parent.grid_slaves():
-            row = widget.grid_info().get("row", 0)
-            if row > 0 and row < 100 and row not in row_numbers:  # 排除添加按钮行（row=100）
-                row_numbers.append(row)
-
-        row_numbers.sort()
-
-        # 重新排列请求头行
-        for i, row_num in enumerate(row_numbers, 1):
-            widgets = parent.grid_slaves(row=row_num)
-            for widget in widgets:
-                widget.grid(row=i)
+        return self.headers_table.main_frame
 
     def _create_body_tab(self, parent):
         """创建请求体选项卡"""
@@ -506,9 +236,10 @@ class SendMessageConfigTab(BaseConfigTab):
 
         # 处理Query参数
         query_params = []
-        for row in self.query_param_rows:
-            key = row["key"].get().strip()
-            value = row["value"].get().strip()
+        query_data = self.query_params_table.get_data()
+        for item in query_data:
+            key = item["key"].strip()
+            value = item["value"].strip()
             if key and value:
                 query_params.append(f"{key}={value}")
 
@@ -517,9 +248,10 @@ class SendMessageConfigTab(BaseConfigTab):
 
         # 处理请求头
         headers = {}
-        for row in self.header_rows:
-            header = row["header"].get().strip()
-            value = row["value"].get().strip()
+        headers_data = self.headers_table.get_data()
+        for item in headers_data:
+            header = item["key"].strip()  # 使用key字段存储header名称
+            value = item["value"].strip()
             if header and value:
                 headers[header] = value
 
