@@ -2,41 +2,15 @@
 import json
 from typing import Optional
 from datetime import datetime
-from core.protocol_parser import ProtocolParser, ParserRegistry, ImageInfoType
+from core.protocol_parser import BaseAlarmParser, ParserRegistry, ImageInfoType
 
 
-class MuckTruckParser(ProtocolParser):
+class MuckTruckParser(BaseAlarmParser):
     """TestAlarm协议解析器"""
 
-    def parse(self, content_type, data) -> dict:
-        """解析HTTP请求内容"""
-        try:
-            if content_type != "application/json":
-                raise ValueError("Unsupported content type")
-
-            json_data = json.loads(data)
-            event_type = json_data.get("eventType", json_data.get("event_type", "N/A"))
-            timestamp = json_data.get("dateTime", json_data.get("timestamp", datetime.now().isoformat()))
-
-            return {
-                "type": "JSON",
-                "event_type": event_type,
-                "timestamp": timestamp,
-                "raw_content": data,
-            }
-        except Exception as e:
-            return {
-                "error": str(e),
-                "type": "unknown",
-                "event_type": "Parse Error",
-                "timestamp": datetime.now().isoformat(),
-            }
-
     def extract_image_info(self, parsed_data: dict) -> Optional[ImageInfoType]:
-        print(parsed_data)
         try:
             json_data = json.loads(parsed_data["raw_content"])
-            print(json_data)
             url = json_data["MuckTruckTargetAnalysisEvent"]["analysisResultList"][0]["pictureFile"]["resourcesContent"]
 
             if url is None:

@@ -664,6 +664,9 @@ class MainWindow:
         parser = ParserRegistry.get_parser("basealarm")
         post_data = message.get("raw_data", b"")
         parsed_data = parser.parse(message["content_type"], post_data)
+
+        parser = ParserRegistry.get_parser(parsed_data["event_type"])
+        parsed_data = parser.parse(message["content_type"], message.get("raw_data", b""))
         message["parsed_data"] = parsed_data
 
         # 处理消息中的图片
@@ -693,7 +696,6 @@ class MainWindow:
     def process_message_images(self, message):
         """处理消息中的图片，与消息UUID关联"""
         message_uuid = message["uuid"]
-        source = message["source"]
 
         # 获取图片信息
         parser = ParserRegistry.get_parser(message["parsed_data"]["event_type"])
@@ -732,6 +734,10 @@ class MainWindow:
     def add_message_to_tree(self, message):
         """添加消息到列表"""
         # 将消息UUID作为标签存储在树形视图项中，用于唯一标识
+        parsed_data = message.get("parsed_data")
+        event_type = (
+            parsed_data["sub_event"] if "sub_event" in parsed_data else parsed_data.get("event_type", "unknown")
+        )
         item = self.ui_msg_tree.insert(
             "",
             "end",
@@ -739,7 +745,7 @@ class MainWindow:
                 message["timestamp"],
                 message["source"],
                 message.get("config_name", ""),
-                message["parsed_data"].get("event_type", "N/A"),
+                event_type,
                 message.get("queue", message.get("topic", "")),
             ),
             tags=(message["uuid"],),

@@ -55,8 +55,8 @@ class ProtocolParser:
         """解析消息内容"""
         raise NotImplementedError
 
-    def extract_image_info(self, parsed_data: dict) -> Optional[ImageInfoType]:
-        """提取图片信息"""
+    def extra_parse(self, serial_root) -> dict:
+        """解析消息内容"""
         raise NotImplementedError
 
     def extract_image_info_list(self, parsed_data: dict) -> List[Optional[ImageInfoType]]:
@@ -95,8 +95,11 @@ class BaseAlarmParser(ProtocolParser):
     def parse(self, content_type, data) -> dict:
         """解析HTTP请求内容"""
         self.content_type = content_type
+        type = "unknown"
+        event_type = "Parse Error"
         try:
             if content_type == "application/xml":
+                type = "XML"
                 root = ET.fromstring(data)
                 ns = {"ns": "http://www.isapi.org/ver20/XMLSchema"}
 
@@ -115,32 +118,29 @@ class BaseAlarmParser(ProtocolParser):
                     timestamp_elem = root.find(".//ns:timeStamp", ns) or root.find(".//timeStamp")
 
                 timestamp = timestamp_elem.text if timestamp_elem is not None else datetime.now().isoformat()
-
-                return {
-                    "type": "XML",
-                    "event_type": event_type,
-                    "timestamp": timestamp,
-                    "raw_content": data,
-                }
             else:
-                # elif content_type == "application/json":
-                json_data = json.loads(data)
-                event_type = json_data.get("eventType", json_data.get("event_type", "N/A"))
-                timestamp = json_data.get("dateTime", json_data.get("timestamp", datetime.now().isoformat()))
-
-                return {
-                    "type": "JSON",
-                    "event_type": event_type,
-                    "timestamp": timestamp,
-                    "raw_content": data,
-                }
+                type = "JSON"
+                root = json.loads(data)
+                event_type = root.get("eventType", root.get("event_type", "N/A"))
+                timestamp = root.get("dateTime", root.get("timestamp", datetime.now().isoformat()))
+            sub_type = self.extra_parse(root)
+            return {
+                "type": type,
+                "event_type": event_type,
+                "timestamp": timestamp,
+                "raw_content": data,
+            } | sub_type
         except Exception as e:
             return {
                 "error": str(e),
-                "type": "unknown",
-                "event_type": "Parse Error",
+                "type": type,
+                "event_type": event_type,
                 "timestamp": datetime.now().isoformat(),
+                "raw_content": data,
             }
+
+    def extra_parse(self, serial_root) -> dict:
+        return {}
 
     # 周界、室内目标识别
     def get_identify_info(self, content: str) -> List[MarkType]:
@@ -313,7 +313,60 @@ class BaseAlarmParser(ProtocolParser):
             return None
 
     def extract_image_info(self, parsed_data: dict) -> Optional[ImageInfoType]:
-        print("parsed_data")
+        """提取图片信息，自动判断raw_content是XML还是JSON格式"""
+        try:
+            raw_content = parsed_data["raw_content"]
+
+            # 判断raw_content是XML还是JSON格式
+            content_type = self._detect_content_type(raw_content)
+
+            if content_type == "XML":
+                return self._extract_image_info_from_xml(parsed_data)
+            elif content_type == "JSON":
+                return self._extract_image_info_from_json(parsed_data)
+            else:
+                print(f"无法识别的格式: {content_type}")
+                return None
+
+        except Exception as e:
+            print(f"提取图片信息失败: {e}")
+        return None
+
+    def _detect_content_type(self, raw_content: bytes) -> str:
+        """检测raw_content的数据格式是XML还是JSON"""
+        try:
+            content_str = raw_content.decode("utf-8", errors="ignore").strip()
+
+            # 检查是否是XML格式
+            if content_str.startswith("<?xml") or content_str.startswith("<"):
+                try:
+                    ET.fromstring(content_str)
+                    return "XML"
+                except ET.ParseError:
+                    pass
+
+            # 检查是否是JSON格式
+            if content_str.startswith("{") or content_str.startswith("["):
+                try:
+                    json.loads(content_str)
+                    return "JSON"
+                except json.JSONDecodeError:
+                    pass
+
+            # 如果都无法解析，尝试根据内容特征判断
+            if "<" in content_str and ">" in content_str:
+                return "XML"
+            elif "{" in content_str and "}" in content_str:
+                return "JSON"
+            else:
+                return "UNKNOWN"
+
+        except Exception as e:
+            print(f"检测内容格式失败: {e}")
+            return "UNKNOWN"
+
+    def _extract_image_info_from_xml(self, parsed_data: dict) -> Optional[ImageInfoType]:
+        """从XML格式中提取图片信息"""
         try:
             root = ET.fromstring(parsed_data["raw_content"])
             ns = {"ns": "http://www.isapi.org/ver20/XMLSchema"}
@@ -338,6 +391,46 @@ class BaseAlarmParser(ProtocolParser):
                     "filename": filename,
                     "targetList": self.get_target_info(parsed_data["raw_content"]),
                 }
+        except Exception as e:
+            print(f"从XML提取图片信息失败: {e}")
+        return None
+
+    def _extract_image_info_from_json(self, parsed_data: dict) -> Optional[ImageInfoType]:
+        """从JSON格式中提取图片信息"""
+        # 转换为大驼峰（帕斯卡命名法）
+        event_type_camelCase = parsed_data["event_type"]
+        event_type = event_type_camelCase[0].upper() + event_type_camelCase[1:]
+        try:
+            json_data = json.loads(parsed_data["raw_content"])
+            event_json = json_data.get(event_type)
+            url = event_json["BackgroundImage"]["resourcesContent"]
+
+            if url is None:
+                raise ValueError("No image URL found")
+            rectList = []
+            target_key, rect_key = (
+                ("humanInfo", "humanRect") if "humanInfo" in event_json else ("targetList", "targetRect")
+            )
+            for target in event_json[target_key]:
+                rectInfo = {
+                    "rect": target[rect_key],
+                    "marks": [],
+                }
+                if "targetID" in target:
+                    rectInfo["marks"].append({"name": "targetID", "value": target["targetID"]})
+
+                rectList.append(rectInfo)
+
+            # 生成唯一的文件名
+            import uuid
+
+            timestamp = event_json["timeStamp"] if "timeStamp" in event_json else parsed_data["timestamp"]
+            filename = f"image_{uuid.uuid4().hex[:8]}_{timestamp.replace(':', '').replace('-', '')}.jpg"
+            return {
+                "url": url,
+                "filename": filename,
+                "targetList": rectList,
+            }
         except Exception as e:
             print(f"提取图片信息失败: {e}")
         return None
