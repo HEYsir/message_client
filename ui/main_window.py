@@ -1,3 +1,4 @@
+import glob
 import sys
 import importlib
 from pathlib import Path
@@ -53,7 +54,11 @@ def special_ui_tabs(app_path, module_name: str):
         item_path = os.path.join(app_path, item)
         if not os.path.isdir(item_path) or item.startswith("__"):
             continue
-        if not os.path.exists(os.path.join(item_path, f"{module_name}.py")):
+        # 使用 glob 检查目录下是否存在指定名称的文件（忽略扩展名）
+        pattern = os.path.join(item_path, f"{module_name}.*")
+        matching_files = glob.glob(pattern)
+        if 0 == len(matching_files):
+            print(f"[special_ui_tabs] No module[{module_name}] found for {item}")
             continue
         module_path = f"application.{item}.{module_name}"
         print(f"[discover_recv_tabs] Try import: {module_path}")
