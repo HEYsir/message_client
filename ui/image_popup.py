@@ -70,6 +70,23 @@ class ImagePopup:
         )
         self.popup_image_label.pack(fill=tk.BOTH, expand=True)
 
+        # 图片缩放和移动相关变量
+        self.image_scale = 1.0  # 当前缩放比例
+        self.image_offset_x = 0  # X轴偏移
+        self.image_offset_y = 0  # Y轴偏移
+        self.is_dragging = False  # 是否正在拖拽
+        self.last_drag_x = 0  # 上次拖拽X坐标
+        self.last_drag_y = 0  # 上次拖拽Y坐标
+        self.original_image_size = (0, 0)  # 原始图片尺寸
+        self.current_photo_image = None  # 当前显示的图片对象
+        self.is_ctrl_pressed = False  # Ctrl键是否按下
+        self.zoom_timer = None  # 缩放防抖定时器
+
+        # 预缩放缓存相关变量
+        self.original_image_cache = None  # 原始图片缓存（PIL Image对象）
+        self.scaled_image_cache = None  # 缩放后的图片缓存（PIL Image对象）
+        self.cached_scale = 1.0  # 缓存的缩放比例
+
         # 图片信息标签
         self.popup_image_info_label = tk.Label(image_container, text="", font=("Arial", 10), fg="gray", bg="white")
         self.popup_image_info_label.pack(fill=tk.X, padx=10, pady=5)
@@ -86,6 +103,271 @@ class ImagePopup:
 
         # 弹窗关闭事件
         self.popup.protocol("WM_DELETE_WINDOW", self.close)
+
+        # 绑定键盘和鼠标事件
+        self.bind_events()
+
+    def bind_events(self):
+        """绑定键盘和鼠标事件"""
+        # 绑定键盘事件到弹窗和画布
+        for widget in [self.popup, self.popup_image_canvas]:
+            widget.bind("<KeyPress-Control_L>", self.on_ctrl_press)
+            widget.bind("<KeyPress-Control_R>", self.on_ctrl_press)
+            widget.bind("<KeyRelease-Control_L>", self.on_ctrl_release)
+            widget.bind("<KeyRelease-Control_R>", self.on_ctrl_release)
+            widget.focus_set()  # 设置焦点
+
+        # 绑定鼠标滚轮事件到画布和图片容器
+        for widget in [self.popup_image_canvas, self.popup_image_container, self.popup_image_label]:
+            widget.bind("<MouseWheel>", self.on_mouse_wheel)
+            widget.bind("<ButtonPress-1>", self.on_mouse_press)
+            widget.bind("<B1-Motion>", self.on_mouse_drag)
+            widget.bind("<ButtonRelease-1>", self.on_mouse_release)
+
+        # 确保弹窗可以接收键盘事件
+        self.popup.focus_force()
+
+        print("事件绑定完成：画布、容器、标签都绑定了鼠标事件")
+
+    def on_ctrl_press(self, event):
+        """Ctrl键按下事件"""
+        print("Ctrl键按下")
+        self.is_ctrl_pressed = True
+        print(f"Ctrl状态: {self.is_ctrl_pressed}")
+
+    def on_ctrl_release(self, event):
+        """Ctrl键释放事件"""
+        print("Ctrl键释放")
+        self.is_ctrl_pressed = False
+        print(f"Ctrl状态: {self.is_ctrl_pressed}")
+
+    def on_mouse_wheel(self, event):
+        """鼠标滚轮事件 - 缩放图片（即时更新，无防抖）"""
+        print(f"鼠标滚轮事件: delta={event.delta}, Ctrl状态={self.is_ctrl_pressed}")
+
+        if not self.is_ctrl_pressed or not self.current_popup_image:
+            print("条件不满足: Ctrl未按下或无图片")
+            return
+
+        # 取消之前的缩放定时器
+        if self.zoom_timer:
+            self.parent.after_cancel(self.zoom_timer)
+            self.zoom_timer = None
+
+        # 缩放因子
+        zoom_factor = 1.1 if event.delta > 0 else 0.9
+        print(f"缩放因子: {zoom_factor}")
+
+        # 限制缩放范围
+        new_scale = self.image_scale * zoom_factor
+        if new_scale < 0.1:  # 最小缩放10%
+            new_scale = 0.1
+        elif new_scale > 5.0:  # 最大缩放500%
+            new_scale = 5.0
+
+        print(f"当前缩放: {self.image_scale}, 新缩放: {new_scale}")
+
+        if new_scale != self.image_scale:
+            # 计算鼠标位置相对于图片的坐标
+            canvas_x = self.popup_image_canvas.canvasx(event.x)
+            canvas_y = self.popup_image_canvas.canvasy(event.y)
+
+            # 获取图片窗口位置
+            window_x, window_y = self.popup_image_canvas.coords("image_window")
+
+            # 计算鼠标在图片中的相对位置
+            mouse_rel_x = (canvas_x - window_x) / self.image_scale
+            mouse_rel_y = (canvas_y - window_y) / self.image_scale
+
+            # 更新缩放比例
+            self.image_scale = new_scale
+
+            # 重新计算偏移，使鼠标点保持在同一位置
+            self.image_offset_x = canvas_x - mouse_rel_x * self.image_scale
+            self.image_offset_y = canvas_y - mouse_rel_y * self.image_scale
+
+            # print(f"更新缩放: {self.image_scale}, 偏移: ({self.image_offset_x}, {self.image_offset_y})")
+
+            # 立即更新图片显示，无延迟
+            self.display_image(self.current_popup_image, reset_scale=False)
+
+    def on_mouse_press(self, event):
+        """鼠标按下事件 - 开始拖拽"""
+        print(f"鼠标按下: Ctrl状态={self.is_ctrl_pressed}, 有图片={self.current_popup_image is not None}")
+
+        if not self.is_ctrl_pressed or not self.current_popup_image:
+            print("条件不满足，不开始拖拽")
+            return
+
+        self.is_dragging = True
+        self.last_drag_x = event.x
+        self.last_drag_y = event.y
+
+        print(f"开始拖拽: 起始位置=({self.last_drag_x}, {self.last_drag_y})")
+
+        # 更改鼠标光标为移动图标
+        self.popup_image_canvas.config(cursor="fleur")
+
+    def on_mouse_drag(self, event):
+        """鼠标拖拽事件 - 移动图片（优化版，减少重绘）"""
+        if not self.is_dragging or not self.current_popup_image or not self.is_ctrl_pressed:
+            # 如果Ctrl键释放了，结束拖拽
+            if self.is_dragging and not self.is_ctrl_pressed:
+                self.is_dragging = False
+                self.popup_image_canvas.config(cursor="")
+            return
+
+        # 计算移动距离
+        dx = event.x - self.last_drag_x
+        dy = event.y - self.last_drag_y
+
+        # 更新偏移
+        self.image_offset_x += dx
+        self.image_offset_y += dy
+
+        # 更新最后位置
+        self.last_drag_x = event.x
+        self.last_drag_y = event.y
+
+        # 优化：只更新位置，不重绘图片（除非需要绘制矩形框）
+        if self.show_all_rects_flag or self.selected_rect_index is not None:
+            # 如果有矩形框需要显示，需要重新绘制图片
+            self.display_image(self.current_popup_image, reset_scale=False)
+        else:
+            # 没有矩形框，只更新位置
+            self._update_image_position_only()
+
+        # 阻止事件传播，避免触发其他重绘
+        return "break"
+
+    def on_mouse_release(self, event):
+        """鼠标释放事件 - 结束拖拽"""
+        self.is_dragging = False
+        # 恢复默认鼠标光标
+        self.popup_image_canvas.config(cursor="")
+
+    def _update_image_position_only(self):
+        """只更新图片位置，不重绘图片（优化移动性能）"""
+        if not self.current_popup_image or not self.current_photo_image:
+            return
+
+        # 直接更新图片窗口位置
+        self.popup_image_canvas.coords("image_window", self.image_offset_x, self.image_offset_y)
+
+        # 更新图片信息（仅位置信息）
+        if hasattr(self, "original_image_size") and self.original_image_size:
+            original_width, original_height = self.original_image_size
+            scaled_width = int(original_width * self.image_scale)
+            scaled_height = int(original_height * self.image_scale)
+
+            target_info = ""
+            if "targetList" in self.current_popup_image and self.current_popup_image["targetList"]:
+                rect_count = len(self.current_popup_image["targetList"])
+                target_info = f" | 检测到 {rect_count} 个目标"
+
+            image_info_text = f"原始尺寸: {original_width}x{original_height} | 显示尺寸: {scaled_width}x{scaled_height} | 缩放: {self.image_scale:.1f}x | 偏移: ({int(self.image_offset_x)}, {int(self.image_offset_y)}){target_info}"
+            self.popup_image_info_label.config(text=image_info_text)
+
+    def _update_image_position(self):
+        """更新图片位置（仅移动，不重新加载图片）"""
+        if not self.current_popup_image or not self.current_photo_image:
+            return
+
+        # 直接更新图片窗口位置
+        self.popup_image_canvas.coords("image_window", self.image_offset_x, self.image_offset_y)
+
+        # 更新图片信息（仅位置信息）
+        if hasattr(self, "original_image_size") and self.original_image_size:
+            original_width, original_height = self.original_image_size
+            scaled_width = int(original_width * self.image_scale)
+            scaled_height = int(original_height * self.image_scale)
+
+            target_info = ""
+            if "targetList" in self.current_popup_image and self.current_popup_image["targetList"]:
+                rect_count = len(self.current_popup_image["targetList"])
+                target_info = f" | 检测到 {rect_count} 个目标"
+
+            image_info_text = f"原始尺寸: {original_width}x{original_height} | 显示尺寸: {scaled_width}x{scaled_height} | 缩放: {self.image_scale:.1f}x | 偏移: ({int(self.image_offset_x)}, {int(self.image_offset_y)}){target_info}"
+            self.popup_image_info_label.config(text=image_info_text)
+
+    def update_image_display(self):
+        """更新图片显示（根据缩放和偏移）"""
+        if not self.current_popup_image:
+            return
+
+        try:
+            image_path = self.current_popup_image["filename"]
+            if not os.path.exists(image_path):
+                return
+
+            # 加载原始图片
+            image = Image.open(image_path)
+            original_width, original_height = image.size
+            self.original_image_size = (original_width, original_height)
+
+            # 计算缩放后的尺寸
+            scaled_width = int(original_width * self.image_scale)
+            scaled_height = int(original_height * self.image_scale)
+
+            # 调整图片大小
+            if self.image_scale != 1.0:
+                image = image.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
+
+            # 如果有 targetList，绘制矩形框
+            if "targetList" in self.current_popup_image and self.current_popup_image["targetList"]:
+                drawable_image = image.copy()
+                draw = ImageDraw.Draw(drawable_image)
+
+                try:
+                    font = ImageFont.truetype("simsun.ttc", 12)
+                except:
+                    font = ImageFont.load_default()
+
+                # 根据选择状态绘制矩形框
+                if self.show_all_rects_flag:
+                    for i, target_info in enumerate(self.current_popup_image["targetList"]):
+                        self.draw_rect(draw, target_info, drawable_image, font, i, self.image_scale)
+                elif self.selected_rect_index is not None:
+                    if self.selected_rect_index < len(self.current_popup_image["targetList"]):
+                        target_info = self.current_popup_image["targetList"][self.selected_rect_index]
+                        self.draw_rect(
+                            draw, target_info, drawable_image, font, self.selected_rect_index, self.image_scale
+                        )
+
+                image = drawable_image
+
+            # 转换为Tkinter格式
+            photo = ImageTk.PhotoImage(image)
+
+            # 更新图片标签
+            self.popup_image_label.config(image=photo, text="")
+            self.popup_image_label.image = photo
+            self.current_photo_image = photo
+
+            # 调整容器大小
+            self.popup_image_container.config(width=scaled_width, height=scaled_height)
+            self.popup_image_canvas.config(scrollregion=(0, 0, scaled_width, scaled_height))
+
+            # 更新图片窗口位置
+            self.popup_image_canvas.coords("image_window", self.image_offset_x, self.image_offset_y)
+
+            # 更新图片信息
+            file_size = os.path.getsize(image_path)
+            file_size_kb = file_size / 1024
+
+            target_info = ""
+            if "targetList" in self.current_popup_image and self.current_popup_image["targetList"]:
+                rect_count = len(self.current_popup_image["targetList"])
+                target_info = f" | 检测到 {rect_count} 个目标"
+
+            image_info_text = f"原始尺寸: {original_width}x{original_height} | 显示尺寸: {scaled_width}x{scaled_height} | 缩放: {self.image_scale:.1f}x | 大小: {file_size_kb:.1f}KB{target_info}"
+            self.popup_image_info_label.config(text=image_info_text)
+
+        except Exception as e:
+            print(f"更新图片显示失败: {e}")
+            import traceback
+
+            traceback.print_exc()
 
     def create_rect_sidebar(self, parent):
         """创建矩形框和标签侧边栏"""
@@ -176,27 +458,27 @@ class ImagePopup:
         self.selected_rect_index = index
         self.show_all_rects_flag = False
 
-        # 重新显示图片，只显示选中的矩形框
+        # 重新显示图片，只显示选中的矩形框，保持当前缩放状态
         if self.current_popup_image:
-            self.display_image(self.current_popup_image)
+            self.display_image(self.current_popup_image, reset_scale=False)
 
     def show_all_rects(self):
         """显示所有矩形框"""
         self.selected_rect_index = None
         self.show_all_rects_flag = True
 
-        # 重新显示图片，显示所有矩形框
+        # 重新显示图片，显示所有矩形框，保持当前缩放状态
         if self.current_popup_image:
-            self.display_image(self.current_popup_image)
+            self.display_image(self.current_popup_image, reset_scale=False)
 
     def hide_all_rects(self):
         """隐藏所有矩形框"""
         self.selected_rect_index = None
         self.show_all_rects_flag = False
 
-        # 重新显示图片，不显示任何矩形框
+        # 重新显示图片，不显示任何矩形框，保持当前缩放状态
         if self.current_popup_image:
-            self.display_image(self.current_popup_image)
+            self.display_image(self.current_popup_image, reset_scale=False)
 
     def on_popup_resize(self, event):
         """弹窗大小变化事件处理（带防抖机制）"""
@@ -220,8 +502,8 @@ class ImagePopup:
                 if not image_path or not os.path.exists(image_path):
                     return
 
-                # 重新显示图片以适应新的大小
-                self.display_image(self.current_popup_image)
+                # 窗口大小变化时不重置缩放状态，只重新显示图片
+                self.display_image(self.current_popup_image, reset_scale=False)
         except Exception as e:
             print(f"弹窗大小变化处理错误: {e}")
         finally:
@@ -239,8 +521,13 @@ class ImagePopup:
         # 显示图片和矩形框
         self.display_image(image_info)
 
-    def display_image(self, image_info):
-        """在弹窗中显示图片（自适应窗口大小并按原始比例铺满）"""
+    def display_image(self, image_info, reset_scale=True):
+        """在弹窗中显示图片（支持缩放和移动功能)
+
+        Args:
+            image_info: 图片信息字典
+            reset_scale: 是否重置缩放状态（默认True，窗口大小变化时重置）
+        """
         image_path = image_info["filename"]
         if not image_path or not os.path.exists(image_path):
             self.popup_image_label.config(image="", text="暂无图片")
@@ -248,47 +535,60 @@ class ImagePopup:
             return
 
         try:
-            # 存储当前图片信息，用于窗口大小变化时重新显示
+            # 检查是否是新图片（需要重置缩放状态）
+            is_new_image = self.current_popup_image is None or self.current_popup_image.get(
+                "filename"
+            ) != image_info.get("filename")
+
+            # 存储当前图片信息
             self.current_popup_image = image_info
 
-            # 加载图片
-            image = Image.open(image_path)
-            original_width, original_height = image.size
+            # 只有在真正需要重置时才重置缩放状态
+            if reset_scale and is_new_image:
+                self.image_scale = 1.0
+                self.image_offset_x = 0
+                self.image_offset_y = 0
+                # 清除缓存
+                self.original_image_cache = None
+                self.scaled_image_cache = None
+                self.cached_scale = 1.0
+                # print("重置缩放状态（新图片）")
+            else:
+                # 保持当前缩放和偏移
+                # print(f"保持缩放状态: scale={self.image_scale}, offset=({self.image_offset_x}, {self.image_offset_y})")
+                pass
 
-            # 获取当前画布可用尺寸
-            canvas_width = self.popup_image_canvas.winfo_width()
-            canvas_height = self.popup_image_canvas.winfo_height()
-
-            # 如果画布尺寸为1（初始化状态），使用默认尺寸
-            if canvas_width <= 1 or canvas_height <= 1:
-                canvas_width = 600
-                canvas_height = 400
-
-            # 计算保持原始比例的缩放比例
-            scale_x = canvas_width / original_width
-            scale_y = canvas_height / original_height
-            scale = min(scale_x, scale_y, 1.0)  # 不超过原始大小
-
-            # 计算新尺寸，保持原始比例
-            new_width = int(original_width * scale)
-            new_height = int(original_height * scale)
-
-            # 调整图片大小
-            if scale < 1.0:
-                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            # 如果缓存为空或者是新图片，加载原始图片
+            if self.original_image_cache is None or is_new_image:
+                self.original_image_cache = Image.open(image_path)
+                self.original_image_size = self.original_image_cache.size
 
             # 更新矩形框侧边栏
             self.update_rect_sidebar(image_info)
 
+            # 计算缩放后的尺寸
+            scaled_width = int(self.original_image_size[0] * self.image_scale)
+            scaled_height = int(self.original_image_size[1] * self.image_scale)
+
+            # 使用预缩放缓存机制
+            if self.scaled_image_cache is None or self.cached_scale != self.image_scale:
+                # 重新缩放图片
+                if self.image_scale != 1.0:
+                    self.scaled_image_cache = self.original_image_cache.resize(
+                        (scaled_width, scaled_height), Image.Resampling.LANCZOS
+                    )
+                else:
+                    self.scaled_image_cache = self.original_image_cache.copy()
+                self.cached_scale = self.image_scale
+
+            # 创建绘制副本
+            drawable_image = self.scaled_image_cache.copy()
+            draw = ImageDraw.Draw(drawable_image)
+
             # 如果有 targetList，根据选择状态绘制矩形框
             if "targetList" in image_info and image_info["targetList"]:
-                # 创建可绘制的图像副本
-                drawable_image = image.copy()
-                draw = ImageDraw.Draw(drawable_image)
-
                 # 尝试加载支持UTF-8的字体
                 try:
-                    # 优先尝试使用支持中文的字体
                     font = ImageFont.truetype("simsun.ttc", 12)  # 宋体
                 except:
                     font = ImageFont.load_default()
@@ -297,7 +597,7 @@ class ImagePopup:
                 if self.show_all_rects_flag:
                     # 显示所有矩形框
                     for i, target_info in enumerate(image_info["targetList"]):
-                        self.draw_rect(draw, target_info, drawable_image, font, i, scale)
+                        self.draw_rect(draw, target_info, drawable_image, font, i, self.image_scale)
                 elif self.selected_rect_index is not None:
                     # 只显示选中的矩形框
                     if self.selected_rect_index < len(image_info["targetList"]):
@@ -308,32 +608,28 @@ class ImagePopup:
                             drawable_image,
                             font,
                             self.selected_rect_index,
-                            scale,
+                            self.image_scale,
                         )
-                else:
-                    # 默认不显示矩形框
-                    pass
-
-                # 使用绘制后的图像
-                image = drawable_image
 
             # 转换为Tkinter可显示的格式
-            photo = ImageTk.PhotoImage(image)
+            photo = ImageTk.PhotoImage(drawable_image)
 
             # 更新图片标签
+            old_photo = self.current_photo_image
+            self.current_photo_image = photo
             self.popup_image_label.config(image=photo, text="")
             self.popup_image_label.image = photo  # 保持引用
 
-            # 调整容器大小以适应图片
-            self.popup_image_container.config(width=new_width, height=new_height)
-            self.popup_image_canvas.config(scrollregion=(0, 0, new_width, new_height))
+            # 清理旧图片引用
+            if old_photo:
+                del old_photo
 
-            # 将图片窗口居中显示
-            canvas_width = self.popup_image_canvas.winfo_width()
-            canvas_height = self.popup_image_canvas.winfo_height()
-            x_offset = max(0, (canvas_width - new_width) // 2)
-            y_offset = max(0, (canvas_height - new_height) // 2)
-            self.popup_image_canvas.coords("image_window", x_offset, y_offset)
+            # 调整容器大小以适应图片
+            self.popup_image_container.config(width=scaled_width, height=scaled_height)
+            self.popup_image_canvas.config(scrollregion=(0, 0, scaled_width, scaled_height))
+
+            # 更新图片窗口位置（考虑偏移）
+            self.popup_image_canvas.coords("image_window", self.image_offset_x, self.image_offset_y)
 
             # 更新图片信息
             file_size = os.path.getsize(image_path)
@@ -344,8 +640,7 @@ class ImagePopup:
                 rect_count = len(image_info["targetList"])
                 target_info = f" | 检测到 {rect_count} 个目标"
 
-            display_width, display_height = image.size
-            image_info_text = f"原始尺寸: {original_width}x{original_height} | 显示尺寸: {display_width}x{display_height} | 大小: {file_size_kb:.1f}KB{target_info}"
+            image_info_text = f"原始尺寸: {self.original_image_size[0]}x{self.original_image_size[1]} | 显示尺寸: {scaled_width}x{scaled_height} | 缩放: {self.image_scale:.1f}x | 大小: {file_size_kb:.1f}KB{target_info}"
             self.popup_image_info_label.config(text=image_info_text)
 
         except Exception as e:
