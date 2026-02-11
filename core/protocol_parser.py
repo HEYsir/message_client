@@ -401,36 +401,71 @@ class BaseAlarmParser(ProtocolParser):
         event_type_camelCase = parsed_data["event_type"]
         event_type = event_type_camelCase[0].upper() + event_type_camelCase[1:]
         try:
-            json_data = json.loads(parsed_data["raw_content"])
-            event_json = json_data.get(event_type)
-            url = event_json["BackgroundImage"]["resourcesContent"]
-
-            if url is None:
-                raise ValueError("No image URL found")
             rectList = []
-            target_key, rect_key = (
-                ("humanInfo", "humanRect") if "humanInfo" in event_json else ("targetList", "targetRect")
-            )
-            for target in event_json[target_key]:
-                rectInfo = {
-                    "rect": target[rect_key],
-                    "marks": [],
+            json_data = json.loads(parsed_data["raw_content"])
+            if "analysisResult" in json_data:
+                result_json = json_data.get("analysisResult")
+                for result_item in result_json:
+                    url = result_item.get("targetPicUrl")
+                    if url is None:
+                        raise ValueError("No image URL found")
+                    targetList = result_item.get("target")
+                    if targetList is None:
+                        print("No target found")
+                        continue
+                    timestamp = result_item["timeStamp"] if "timeStamp" in result_item else parsed_data["timestamp"]
+
+                    for target in targetList:
+                        rectInfo = {
+                            "rect": target.get("rect"),
+                            "marks": [],
+                        }
+                        if "vehicle" in target:
+                            if "license" in target["vehicle"]:
+                                rectInfo["marks"].append(
+                                    {"name": "车牌", "value": target["vehicle"]["license"]["value"]}
+                                )
+
+                        rectList.append(rectInfo)
+
+                # 生成唯一的文件名
+                import uuid
+
+                filename = f"image_{uuid.uuid4().hex[:8]}_{timestamp.replace(':', '').replace('-', '')}.jpg"
+                return {
+                    "url": url,
+                    "filename": filename,
+                    "targetList": rectList,
                 }
-                if "targetID" in target:
-                    rectInfo["marks"].append({"name": "targetID", "value": target["targetID"]})
+            elif event_type in json_data:
+                event_json = json_data.get(event_type)
+                url = event_json["BackgroundImage"]["resourcesContent"]
 
-                rectList.append(rectInfo)
+                if url is None:
+                    raise ValueError("No image URL found")
+                target_key, rect_key = (
+                    ("humanInfo", "humanRect") if "humanInfo" in event_json else ("targetList", "targetRect")
+                )
+                for target in event_json[target_key]:
+                    rectInfo = {
+                        "rect": target[rect_key],
+                        "marks": [],
+                    }
+                    if "targetID" in target:
+                        rectInfo["marks"].append({"name": "targetID", "value": target["targetID"]})
 
-            # 生成唯一的文件名
-            import uuid
+                    rectList.append(rectInfo)
 
-            timestamp = event_json["timeStamp"] if "timeStamp" in event_json else parsed_data["timestamp"]
-            filename = f"image_{uuid.uuid4().hex[:8]}_{timestamp.replace(':', '').replace('-', '')}.jpg"
-            return {
-                "url": url,
-                "filename": filename,
-                "targetList": rectList,
-            }
+                # 生成唯一的文件名
+                import uuid
+
+                timestamp = event_json["timeStamp"] if "timeStamp" in event_json else parsed_data["timestamp"]
+                filename = f"image_{uuid.uuid4().hex[:8]}_{timestamp.replace(':', '').replace('-', '')}.jpg"
+                return {
+                    "url": url,
+                    "filename": filename,
+                    "targetList": rectList,
+                }
         except Exception as e:
             print(f"提取图片信息失败: {e}")
         return None
